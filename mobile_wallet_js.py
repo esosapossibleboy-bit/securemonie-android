@@ -6,7 +6,7 @@ WALLET_JS = """
         bumpIdle(); refreshWallet();
     }
     function lockApp(msg = "") {
-        clearTimeout(idle); token = ""; localStorage.removeItem("sm_token");
+        clearTimeout(idle); token = ""; sessionStorage.removeItem("sm_token"); localStorage.removeItem("sm_token");
         topActions.style.display = "none"; lvlBadge.style.display = "none"; topSelfieImg.style.display = "none"; brandLogo.style.display = "flex";
         showQuickUnlock(msg);
     }

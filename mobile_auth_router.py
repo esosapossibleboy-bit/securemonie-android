@@ -61,9 +61,9 @@ def auth_user(authorization: Optional[str]):
         raise HTTPException(status_code=401, detail="Sign in required")
     _, tok = authorization.split(" ", 1)
     sess = mobile_server.SESSIONS.get(tok)
-    if not sess or time.time() - sess["seen"] > 600:
+    if not sess or time.time() - sess["seen"] > 180:
         mobile_server.SESSIONS.pop(tok, None)
-        raise HTTPException(status_code=401, detail="Session expired")
+        raise HTTPException(status_code=401, detail="Session expired after 3 minutes")
     sess["seen"] = time.time()
     return sess
 

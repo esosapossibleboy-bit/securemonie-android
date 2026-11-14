@@ -1,11 +1,17 @@
 AUTH_JS = """
-    let token = localStorage.getItem("sm_token") || "", keypadBuf = "", generatedOtp = "", capturedSelfie = "", camStream = null, idle = null;
+    let token = sessionStorage.getItem("sm_token") || "", keypadBuf = "", generatedOtp = "", capturedSelfie = "", camStream = null, idle = null;
     const headers = () => ({ "Content-Type":"application/json", "Authorization":"Bearer " + token });
     const localTime = () => new Date().toLocaleString("en-GB", { day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" });
-    function bumpIdle() { clearTimeout(idle); if (token) idle = setTimeout(() => lockApp("🔒 Auto-locked after 10 mins inactivity"), 600000); }
+    function bumpIdle() {
+        clearTimeout(idle);
+        if (token) idle = setTimeout(() => lockApp("🔒 Auto-locked after 3 mins inactivity"), 180000);
+    }
     window.addEventListener("click", bumpIdle, { passive:true });
     window.addEventListener("touchstart", bumpIdle, { passive:true });
     window.addEventListener("keydown", bumpIdle, { passive:true });
+    document.addEventListener("visibilitychange", () => {
+        if (document.hidden && token) lockApp("🔒 Locked for your security");
+    });
     function getInitials(name) {
         const clean = (name || "SM").trim().replace(/\\s+/g, " ");
         const spaceIdx = clean.indexOf(" ");
@@ -117,7 +123,7 @@ AUTH_JS = """
         const res = await fetch("/api/register", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload) });
         const d = await res.json();
         if (!res.ok) return signupMsg.textContent = Array.isArray(d.detail) ? d.detail.map(x => x.msg).join(", ") : (d.detail || "Registration failed");
-        token = d.token; localStorage.setItem("sm_token", token); saveDeviceProfile(d.full_name, d.phone, d.selfie_data);
+        token = d.token; sessionStorage.setItem("sm_token", token); saveDeviceProfile(d.full_name, d.phone, d.selfie_data);
         enterApp();
     }
     function renderKeypadCells() {
@@ -140,7 +146,7 @@ AUTH_JS = """
         const d = await res.json();
         keypadBuf = ""; renderKeypadCells();
         if (!res.ok) return keypadMsg.textContent = d.detail || "Incorrect 6-digit passcode";
-        token = d.token; localStorage.setItem("sm_token", token); saveDeviceProfile(d.full_name, d.phone, d.selfie_data);
+        token = d.token; sessionStorage.setItem("sm_token", token); saveDeviceProfile(d.full_name, d.phone, d.selfie_data);
         enterApp();
     }
     async function submitLogin() {
@@ -148,7 +154,7 @@ AUTH_JS = """
         const res = await fetch("/api/login", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ identifier:loginIdent.value, password:loginPass.value }) });
         const d = await res.json();
         if (!res.ok) return loginMsg.textContent = Array.isArray(d.detail) ? d.detail.map(x => x.msg).join(", ") : (d.detail || "Sign in failed");
-        token = d.token; localStorage.setItem("sm_token", token); saveDeviceProfile(d.full_name, d.phone, d.selfie_data);
+        token = d.token; sessionStorage.setItem("sm_token", token); saveDeviceProfile(d.full_name, d.phone, d.selfie_data);
         loginIdent.value = loginPass.value = "";
         enterApp();
     }

@@ -6,7 +6,7 @@ AUTH_JS = """
     ["click", "touchstart", "keydown"].forEach(e => window.addEventListener(e, bumpIdle, { passive:true }));
     function getInitials(name) {
         const p = (name || "SM").trim().split(/\\s+/);
-        return (p[0][0] + (p[1] ? p[1][0] : (p[0][1] || ""))).toUpperCase();
+        return (p + (p ? p : (p || ""))).toUpperCase();
     }
     function saveDeviceProfile(name, phone, selfie) {
         if (name) localStorage.setItem("sm_name", name);
@@ -19,27 +19,23 @@ AUTH_JS = """
         try {
             stopCamera();
             camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
-            selfieVideo.srcObject = camStream; selfieVideo.style.display = "block"; snapBtn.style.display = "inline-block";
-        } catch (e) { signupMsg.textContent = "Camera blocked—use the file camera button below to snap your selfie."; }
+            selfiePreview.style.display = "none";
+            selfieVideo.srcObject = camStream;
+            selfieVideo.style.display = "block";
+            snapBtn.style.display = "inline-block";
+            camBtn.textContent = "Restart Camera";
+        } catch (e) { signupMsg.textContent = "Please allow front camera access in your browser settings to take a selfie."; }
     }
     function takeSelfie() {
         const ctx = selfieCanvas.getContext("2d");
         ctx.drawImage(selfieVideo, 0, 0, 160, 160);
         capturedSelfie = selfieCanvas.toDataURL("image/jpeg", 0.75);
-        selfiePreview.src = capturedSelfie; selfiePreview.style.display = "block";
-        selfieVideo.style.display = "none"; snapBtn.style.display = "none"; stopCamera();
-    }
-    function handleSelfieFile(ev) {
-        const file = ev.target.files && ev.target.files[0];
-        if (!file) return;
-        const img = new Image();
-        img.onload = () => {
-            const ctx = selfieCanvas.getContext("2d");
-            ctx.drawImage(img, 0, 0, 160, 160);
-            capturedSelfie = selfieCanvas.toDataURL("image/jpeg", 0.75);
-            selfiePreview.src = capturedSelfie; selfiePreview.style.display = "block"; stopCamera();
-        };
-        img.src = URL.createObjectURL(file);
+        selfiePreview.src = capturedSelfie;
+        selfiePreview.style.display = "block";
+        selfieVideo.style.display = "none";
+        snapBtn.style.display = "none";
+        camBtn.textContent = "Retake Selfie";
+        stopCamera();
     }
     function showQuickUnlock(msg = "") {
         const phone = localStorage.getItem("sm_phone"), name = localStorage.getItem("sm_name"), selfie = localStorage.getItem("sm_selfie");
@@ -64,7 +60,7 @@ AUTH_JS = """
     function toggleBizFields() { bizOnlyFields.style.display = regType.value === "Business" ? "block" : "none"; }
     function sendOtp() {
         signupMsg.textContent = "";
-        if (!/^0[789][01]\\d{8}$/.test(regPhone.value.trim())) return signupMsg.textContent = "Enter a valid 11-digit Nigerian phone number (e.g. 08012345678)";
+        if (!/^0\\d{8}$/.test(regPhone.value.trim())) return signupMsg.textContent = "Enter a valid 11-digit Nigerian phone number (e.g. 08012345678)";
         generatedOtp = String(Math.floor(100000 + Math.random() * 900000));
         otpHint.textContent = `📩 Demo SMS OTP sent to ${regPhone.value.trim()}: ${generatedOtp}`;
     }
@@ -75,10 +71,10 @@ AUTH_JS = """
         }
         if (step === 3) {
             if (!regName.value.trim() || !regEmail.value.includes("@")) return signupMsg.textContent = "Enter your Legal Full Name and Email Address";
-            if (!capturedSelfie) return signupMsg.textContent = "Please capture your live face selfie before continuing";
+            if (!capturedSelfie) return signupMsg.textContent = "Please click Open Front Camera and Take a Selfie before continuing";
         }
         stopCamera();
-        [1, 2, 3, 4].forEach(n => document.getElementById("wizStep" + n).style.display = n === step ? "block" : "none");
+       .forEach(n => document.getElementById("wizStep" + n).style.display = n === step ? "block" : "none");
         wizBadge.textContent = `STEP ${step} OF 4`;
         toggleBizFields();
     }

@@ -32,19 +32,15 @@ SIGNUP_WIZARD_HTML = """
                 <input id="regNin" type="text" maxlength="11" inputmode="numeric" placeholder="11-Digit NIN (Optional for Tier 1)" />
                 <input id="regAddress" placeholder="Residential / Proof of Address" />
 
-                <div style="background:#0b1021;border:1px dashed #4f46e5;border-radius:14px;padding:12px;margin-top:10px;text-align:center;">
-                    <div style="font-weight:700;font-size:0.88rem;color:#fbbf24;margin-bottom:6px;">📸 Live Face Selfie Verification (Required)</div>
-                    <video id="selfieVideo" autoplay playsinline muted style="display:none;width:120px;height:120px;object-fit:cover;border-radius:50%;border:3px solid #f59e0b;margin:0 auto 8px;"></video>
-                    <img id="selfiePreview" style="display:none;width:120px;height:120px;object-fit:cover;border-radius:50%;border:3px solid #34d399;margin:0 auto 8px;" />
+                <div style="background:#0b1021;border:1px dashed #4f46e5;border-radius:14px;padding:14px;margin-top:10px;text-align:center;">
+                    <div style="font-weight:700;font-size:0.88rem;color:#fbbf24;margin-bottom:8px;">📸 Live Face Selfie Verification (Required)</div>
+                    <video id="selfieVideo" autoplay playsinline muted style="display:none;width:130px;height:130px;object-fit:cover;border-radius:50%;border:3px solid #f59e0b;margin:0 auto 10px;"></video>
+                    <img id="selfiePreview" style="display:none;width:130px;height:130px;object-fit:cover;border-radius:50%;border:3px solid #34d399;margin:0 auto 10px;" />
                     <canvas id="selfieCanvas" width="160" height="160" style="display:none;"></canvas>
                     <div style="display:flex;gap:8px;justify-content:center;">
-                        <button type="button" class="btn-dark" style="margin:0;padding:8px 10px;font-size:0.82rem;" onclick="startCamera()">Open Camera</button>
-                        <button type="button" id="snapBtn" class="btn-gold" style="display:none;margin:0;padding:8px 10px;font-size:0.82rem;" onclick="takeSelfie()">Capture Selfie</button>
+                        <button type="button" id="camBtn" class="btn-dark" style="margin:0;padding:10px 14px;font-size:0.85rem;" onclick="startCamera()">Open Front Camera</button>
+                        <button type="button" id="snapBtn" class="btn-gold" style="display:none;margin:0;padding:10px 14px;font-size:0.85rem;" onclick="takeSelfie()">Take a Selfie</button>
                     </div>
-                    <label style="display:block;margin-top:8px;font-size:0.78rem;color:#94a3b8;cursor:pointer;">
-                        Or take selfie with phone camera:
-                        <input id="selfieFileInput" type="file" accept="image/*" capture="user" onchange="handleSelfieFile(event)" style="margin-top:4px;padding:6px;font-size:0.78rem;" />
-                    </label>
                 </div>
 
                 <div style="display:flex;gap:8px;">

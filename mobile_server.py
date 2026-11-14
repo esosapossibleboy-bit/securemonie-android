@@ -1,5 +1,3 @@
-import secrets
-import time
 from typing import Literal, Optional
 from fastapi import FastAPI, HTTPException, Header
 from fastapi.responses import HTMLResponse, Response
@@ -10,16 +8,14 @@ from bank_core import (
     add_money,
     get_account_summary,
     init_bank_db,
-    login_customer,
     lookup_recipient,
     pay_bill_or_airtime,
-    register_customer,
     send_transfer,
-    update_security_settings,
     vault_action,
 )
 from cards_core import get_sm_cards
 from db_adapter import get_db_connection
+from mobile_auth_router import auth_router, auth_user
 from mobile_cards_router import cards_router
 from mobile_ui import render_mobile_app
 
@@ -27,20 +23,8 @@ app = FastAPI(title="Securemonie Microfinance Bank")
 DB_PATH = "securemonie.db"
 SESSIONS = {}
 app.include_router(pwa_router)
+app.include_router(auth_router)
 app.include_router(cards_router)
-
-class RegisterReq(BaseModel):
-    full_name: str = Field(min_length=2, max_length=60)
-    phone: str = Field(pattern=r"^0[789][01]\d{8}$")
-    email: str = Field(min_length=4, max_length=120)
-    account_type: Literal["Personal", "Business"] = "Personal"
-    password: str = Field(pattern=r"^\d{6}$")
-    pin: str = Field(pattern=r"^\d{4}$")
-    bvn_or_nin: str = Field(default="", max_length=11)
-
-class LoginReq(BaseModel):
-    identifier: str = Field(min_length=3, max_length=120)
-    password: str = Field(pattern=r"^\d{6}$")
 
 class DepositReq(BaseModel):
     amount: float = Field(gt=0, le=50_000_000)
@@ -68,49 +52,9 @@ class VaultReq(BaseModel):
     pin: str = Field(pattern=r"^\d{4}$")
     when: Optional[str] = None
 
-class SettingReq(BaseModel):
-    setting: Literal["kyc", "limit", "pin", "password"]
-    new_value: str = Field(min_length=1, max_length=64)
-    password: str = Field(pattern=r"^\d{6}$")
-
-def auth_user(authorization: Optional[str]):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Sign in required")
-    _, tok = authorization.split(" ", 1)
-    sess = SESSIONS.get(tok)
-    if not sess or time.time() - sess["seen"] > 600:
-        SESSIONS.pop(tok, None)
-        raise HTTPException(status_code=401, detail="Session expired")
-    sess["seen"] = time.time()
-    return sess
-
 @app.get("/", response_class=HTMLResponse)
 def home():
     return render_mobile_app()
-
-@app.post("/api/register")
-def api_reg(req: RegisterReq):
-    conn = get_db_connection(DB_PATH)
-    user = register_customer(conn, req.full_name, req.phone, req.email, req.account_type, req.password, req.pin, req.bvn_or_nin)
-    conn.close()
-    if not user:
-        raise HTTPException(status_code=400, detail="Phone or Email already registered")
-    tok = secrets.token_urlsafe(32)
-    SESSIONS[tok] = {"id": user["id"], "seen": time.time()}
-    return {"token": tok, "phone": req.phone, **user}
-
-@app.post("/api/login")
-def api_login(req: LoginReq):
-    conn = get_db_connection(DB_PATH)
-    user = login_customer(conn, req.identifier, req.password)
-    if not user:
-        conn.close()
-        raise HTTPException(status_code=401, detail="Wrong 6-digit passcode")
-    summary = get_account_summary(conn, user["id"])
-    conn.close()
-    tok = secrets.token_urlsafe(32)
-    SESSIONS[tok] = {"id": user["id"], "seen": time.time()}
-    return {"token": tok, "phone": summary["phone"], **user}
 
 @app.get("/api/wallet")
 def api_wallet(authorization: Optional[str] = Header(None)):
@@ -167,16 +111,6 @@ def api_vault(req: VaultReq, authorization: Optional[str] = Header(None)):
     u = auth_user(authorization)
     conn = get_db_connection(DB_PATH)
     res = vault_action(conn, u["id"], req.action, req.amount, req.pin, req.when)
-    conn.close()
-    if not res["ok"]:
-        raise HTTPException(status_code=400, detail=res["error"])
-    return res
-
-@app.post("/api/settings")
-def api_settings(req: SettingReq, authorization: Optional[str] = Header(None)):
-    u = auth_user(authorization)
-    conn = get_db_connection(DB_PATH)
-    res = update_security_settings(conn, u["id"], req.setting, req.password, req.new_value)
     conn.close()
     if not res["ok"]:
         raise HTTPException(status_code=400, detail=res["error"])

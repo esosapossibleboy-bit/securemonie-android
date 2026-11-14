@@ -12,7 +12,9 @@ from bank_accounts import (
     update_security_settings,
     verify_secret,
 )
-from bank_security import get_security_logs, verify_transaction_guard
+from bank_rewards import award_bill_cashback
+from bank_security import verify_transaction_guard
+from bank_summary import get_account_summary
 
 def lookup_recipient(conn, account_number: str, bank_name: str = "Securemonie MFB"):
     acct = account_number.strip()
@@ -109,7 +111,8 @@ def pay_bill_or_airtime(conn, customer_id: int, service: str, target: str, amoun
     cur.execute("UPDATE customers SET wallet_kobo = wallet_kobo - ? WHERE id = ?", (kobo, customer_id))
     cur.execute("INSERT INTO ledger (reference, customer_id, title, bank_name, kind, amount_kobo, created_at) VALUES (?, ?, ?, 'Bill Payment', 'DEBIT', ?, ?)", (ref, customer_id, f"{service} ({target.strip()})", kobo, ts))
     conn.commit()
-    return {"ok": True, "reference": ref}
+    cb_kobo = award_bill_cashback(conn, customer_id, kobo)
+    return {"ok": True, "reference": ref, "cashback_ngn": cb_kobo / 100}
 
 def vault_action(conn, customer_id: int, action: str, amount_ngn: float, pin: str, when: str = None):
     cur = conn.cursor()
@@ -146,49 +149,3 @@ def vault_action(conn, customer_id: int, action: str, amount_ngn: float, pin: st
         cur.execute("INSERT INTO ledger (reference, customer_id, title, bank_name, kind, amount_kobo, created_at) VALUES (?, ?, '30-Day Vault Interest (18.0% p.a.)', 'SecureVault', 'CREDIT', ?, ?)", (ref, customer_id, gain, ts))
     conn.commit()
     return {"ok": True, "reference": ref}
-
-def get_account_summary(conn, customer_id: int):
-    init_bank_db(conn)
-    cur = conn.cursor()
-    cur.execute(
-        """SELECT full_name, phone, email, account_type, business_name, cac_rc_number, id_type,
-           selfie_data, account_number, kyc_tier, daily_limit_kobo, single_limit_kobo,
-           account_frozen, hide_bal_default, wallet_kobo, vault_kobo
-           FROM customers WHERE id = ?""",
-        (customer_id,),
-    )
-    row = cur.fetchone()
-    if not row:
-        return None
-    (
-        name, phone, email, acct_type, biz_name, cac_rc, id_type,
-        selfie, acct_num, tier, limit_kobo, single_kobo,
-        frozen, hide_bal, w_kobo, v_kobo,
-    ) = row
-    cur.execute("SELECT reference, title, bank_name, kind, amount_kobo, created_at FROM ledger WHERE customer_id = ? ORDER BY id DESC LIMIT 30", (customer_id,))
-    rows = cur.fetchall()
-    txs = [{"ref": r, "title": t, "bank": b, "kind": k, "amount": a / 100, "time": tm} for r, t, b, k, a, tm in rows]
-    money_in = sum(a for _, _, _, k, a, _ in rows if k == "CREDIT") / 100
-    money_out = sum(a for _, _, _, k, a, _ in rows if k == "DEBIT") / 100
-    return {
-        "full_name": name,
-        "phone": phone,
-        "email": email,
-        "account_type": acct_type,
-        "business_name": biz_name,
-        "cac_rc_number": cac_rc,
-        "id_type": id_type,
-        "selfie_data": selfie,
-        "account_number": acct_num,
-        "kyc_tier": tier,
-        "daily_limit_ngn": limit_kobo / 100,
-        "single_limit_ngn": (single_kobo or limit_kobo) / 100,
-        "account_frozen": bool(frozen),
-        "hide_bal_default": bool(hide_bal),
-        "wallet_ngn": w_kobo / 100,
-        "vault_ngn": v_kobo / 100,
-        "money_in_ngn": money_in,
-        "money_out_ngn": money_out,
-        "security_logs": get_security_logs(conn, customer_id),
-        "transactions": txs,
-    }

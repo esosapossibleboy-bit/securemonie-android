@@ -13,6 +13,7 @@ from bank_core import (
     send_transfer,
     vault_action,
 )
+from bank_rewards import apply_referral_code, redeem_rewards_to_wallet
 from cards_core import get_sm_cards
 from db_adapter import get_db_connection
 from mobile_auth_router import auth_router, auth_user
@@ -51,6 +52,9 @@ class VaultReq(BaseModel):
     amount: float = Field(default=0, ge=0, le=50_000_000)
     pin: str = Field(pattern=r"^\d{4}$")
     when: Optional[str] = None
+
+class ReferralReq(BaseModel):
+    code: str = Field(min_length=4, max_length=16)
 
 @app.get("/", response_class=HTMLResponse)
 def home():
@@ -111,6 +115,26 @@ def api_vault(req: VaultReq, authorization: Optional[str] = Header(None)):
     u = auth_user(authorization)
     conn = get_db_connection(DB_PATH)
     res = vault_action(conn, u["id"], req.action, req.amount, req.pin, req.when)
+    conn.close()
+    if not res["ok"]:
+        raise HTTPException(status_code=400, detail=res["error"])
+    return res
+
+@app.post("/api/rewards/claim")
+def api_claim_referral(req: ReferralReq, authorization: Optional[str] = Header(None)):
+    u = auth_user(authorization)
+    conn = get_db_connection(DB_PATH)
+    res = apply_referral_code(conn, u["id"], req.code)
+    conn.close()
+    if not res["ok"]:
+        raise HTTPException(status_code=400, detail=res["error"])
+    return res
+
+@app.post("/api/rewards/redeem")
+def api_redeem_rewards(authorization: Optional[str] = Header(None)):
+    u = auth_user(authorization)
+    conn = get_db_connection(DB_PATH)
+    res = redeem_rewards_to_wallet(conn, u["id"])
     conn.close()
     if not res["ok"]:
         raise HTTPException(status_code=400, detail=res["error"])

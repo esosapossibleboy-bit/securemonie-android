@@ -1,4 +1,6 @@
-TABS_HTML = """
+from mobile_rewards_html import REWARDS_TAB_HTML
+
+TABS_HTML = f"""
             <div id="tabCard" style="display:none;">
                 <div class="card">
                     <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -76,41 +78,5 @@ TABS_HTML = """
                     <div id="txList" style="margin-top:10px;"></div>
                 </div>
             </div>
-
-            <div id="tabRewards" style="display:none;">
-                <div id="panelSettings" class="card">
-                    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
-                        <img id="settingsSelfieImg" style="display:none;width:62px;height:62px;border-radius:50%;object-fit:cover;border:3px solid #f59e0b;" />
-                        <div>
-                            <h3 style="margin:0;">🛡️ Bank Security Center</h3>
-                            <div id="profileInfo" style="font-size:0.84rem;color:#cbd5e1;line-height:1.5;margin-top:4px;"></div>
-                        </div>
-                    </div>
-
-                    <div id="freezeStatusBox" style="background:#0b1021;border:1px solid #2a3963;border-radius:12px;padding:12px;margin-bottom:10px;font-size:0.86rem;">
-                        Status: <strong id="acctStatusText" style="color:#34d399;">✅ ACTIVE & PROTECTED</strong>
-                    </div>
-
-                    <select id="settingType" onchange="updateSettingHint()">
-                        <option value="kyc">Upgrade KYC Level (Enter 11-Digit BVN/NIN)</option>
-                        <option value="limit">Set 24-Hour Daily Transfer Limit (₦)</option>
-                        <option value="single_limit">Set Per-Transaction Transfer Cap (₦)</option>
-                        <option value="biometrics">Enable / Disable Fingerprint & Face ID Login</option>
-                        <option value="pin">Change / Unlock 4-Digit Transaction PIN</option>
-                        <option value="password">Change 6-Digit Login Passcode</option>
-                        <option value="freeze">Emergency Panic Freeze / Unfreeze Account</option>
-                        <option value="privacy">Toggle Hide Balance on App Launch</option>
-                    </select>
-                    <input id="settingNewVal" placeholder="Enter 11-Digit BVN or NIN" />
-                    <input id="settingPass" type="password" maxlength="6" inputmode="numeric" placeholder="Verify Current 6-Digit Passcode" />
-                    <button onclick="saveSetting()">Apply Security Change</button>
-                    <button type="button" class="btn-dark" onclick="logoutAllDevices()">🚫 Sign Out From All Devices</button>
-                    <p id="setMsg" class="err"></p>
-                </div>
-
-                <div class="card">
-                    <h3 style="margin-top:0;">📋 Recent Security Activity Log</h3>
-                    <div id="secLogList" style="font-size:0.84rem;"></div>
-                </div>
-            </div>
+            {REWARDS_TAB_HTML}
 """

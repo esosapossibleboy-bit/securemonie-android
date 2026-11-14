@@ -69,8 +69,8 @@ def render_mobile_app() -> str:
                 <div class="card">
                     <div class="sec-head" style="margin-top:0;"><span>Rewards</span><button type="button" class="sec-link" onclick="openTab('Rewards')">See All</button></div>
                     <div class="two-col">
-                        <div class="mini-box"><div style="font-size:0.82rem;color:#94a3b8;">🪙 Cashback</div><div style="font-weight:800;font-size:1.05rem;margin-top:4px;">₦0.00</div></div>
-                        <div class="mini-box"><div style="font-size:0.82rem;color:#94a3b8;">📣 Referrals</div><div style="font-weight:800;font-size:1.05rem;margin-top:4px;">₦0.00</div></div>
+                        <div class="mini-box" onclick="openTab('Rewards')" style="cursor:pointer;"><div style="font-size:0.82rem;color:#94a3b8;">🪙 Cashback</div><div id="homeCashbackText" style="font-weight:800;font-size:1.05rem;margin-top:4px;color:#fbbf24;">₦0.00</div></div>
+                        <div class="mini-box" onclick="openTab('Rewards')" style="cursor:pointer;"><div style="font-size:0.82rem;color:#94a3b8;">📣 Referrals</div><div id="homeReferralText" style="font-weight:800;font-size:1.05rem;margin-top:4px;color:#34d399;">₦0.00</div></div>
                     </div>
                     <div class="sec-head"><span>Your to-do list</span><button type="button" class="sec-link" onclick="openPanel('panelSettings')">See All</button></div>
                     <div class="mini-box" onclick="openPanel('panelSettings')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;">

@@ -1,5 +1,5 @@
 WALLET_JS = """
-    let hideBal = true, rawBal = 0, curAcct = "";
+    let hideBal = true, rawBal = 0, curAcct = "", curRefCode = "";
     function enterApp() {
         quickUnlockBox.style.display = "none"; loginBox.style.display = "none"; signupWizard.style.display = "none"; forgotBox.style.display = "none";
         appShell.style.display = "block"; bottomTabs.style.display = "flex"; topActions.style.display = "flex"; lvlBadge.style.display = "inline-flex";
@@ -28,11 +28,12 @@ WALLET_JS = """
     function toggleBal() { hideBal = !hideBal; renderBal(); }
     function renderBal() { balText.textContent = hideBal ? "₦ ••••••" : ("₦" + rawBal.toLocaleString("en-NG", { minimumFractionDigits:2 })); }
     function copyAcct() { navigator.clipboard?.writeText(curAcct); alert("✅ Account number copied: " + curAcct); }
+    function copyRefCode() { navigator.clipboard?.writeText(curRefCode); alert("✅ Referral code copied: " + curRefCode); }
     async function refreshWallet() {
         const res = await fetch("/api/wallet", { headers:headers() });
         if (res.status === 401) return lockApp("Session expired");
         const d = await res.json();
-        rawBal = d.wallet_ngn; curAcct = d.account_number;
+        rawBal = d.wallet_ngn; curAcct = d.account_number; curRefCode = d.referral_code || "SM-000000";
         if (typeof d.hide_bal_default === "boolean") hideBal = d.hide_bal_default;
         saveDeviceProfile(d.full_name, d.phone, d.selfie_data);
         if (d.selfie_data) {
@@ -43,6 +44,11 @@ WALLET_JS = """
         lvlBadge.textContent = `🏅 Level ${d.kyc_tier}`;
         acctHeaderText.textContent = `${d.account_number} | ${d.business_name || d.full_name}`;
         renderBal();
+        const cbTxt = "₦" + (d.cashback_ngn || 0).toLocaleString("en-NG", { minimumFractionDigits:2 });
+        const rfTxt = "₦" + (d.referral_ngn || 0).toLocaleString("en-NG", { minimumFractionDigits:2 });
+        homeCashbackText.textContent = tabCashbackText.textContent = cbTxt;
+        homeReferralText.textContent = tabReferralText.textContent = rfTxt;
+        myRefCodeText.textContent = curRefCode;
         vaultText.textContent = "₦" + d.vault_ngn.toLocaleString("en-NG", { minimumFractionDigits:2 });
         moneyInText.textContent = "₦" + (d.money_in_ngn || 0).toLocaleString("en-NG", { minimumFractionDigits:2 });
         moneyOutText.textContent = "₦" + (d.money_out_ngn || 0).toLocaleString("en-NG", { minimumFractionDigits:2 });
@@ -53,6 +59,20 @@ WALLET_JS = """
         acctStatusText.style.color = d.account_frozen ? "#fb7185" : "#34d399";
         profileInfo.textContent = `${d.full_name} • Level ${d.kyc_tier} • Daily: ₦${d.daily_limit_ngn.toLocaleString()} • Single Cap: ₦${(d.single_limit_ngn || d.daily_limit_ngn).toLocaleString()}`;
         renderCardsAndTx(d);
+    }
+    async function claimReferral() {
+        rwdMsg.className = "err"; rwdMsg.textContent = "";
+        const res = await fetch("/api/rewards/claim", { method:"POST", headers:headers(), body:JSON.stringify({ code:claimRefInput.value }) });
+        const d = await res.json();
+        if (!res.ok) return rwdMsg.textContent = d.detail || "Invalid referral code";
+        rwdMsg.className = "ok"; rwdMsg.textContent = `✅ Claimed ₦500 bonus from ${d.inviter}!`; claimRefInput.value = ""; refreshWallet();
+    }
+    async function redeemRewards() {
+        rwdMsg.className = "err"; rwdMsg.textContent = "";
+        const res = await fetch("/api/rewards/redeem", { method:"POST", headers:headers() });
+        const d = await res.json();
+        if (!res.ok) return rwdMsg.textContent = d.detail || "No rewards to redeem";
+        rwdMsg.className = "ok"; rwdMsg.textContent = `✅ Redeemed ₦${d.redeemed_ngn.toLocaleString()} to your wallet!`; refreshWallet();
     }
     async function checkAcct() {
         recipPreview.textContent = "";
@@ -73,7 +93,7 @@ WALLET_JS = """
         const res = await fetch("/api/bills", { method:"POST", headers:headers(), body:JSON.stringify({ service:billSvc.value, target:billTarget.value, amount:parseFloat(billAmt.value), pin:billPin.value, when:localTime() }) });
         const d = await res.json();
         if (!res.ok) return billMsg.textContent = d.detail || "Failed";
-        billMsg.className = "ok"; billMsg.textContent = `✅ Paid (${d.reference})`; billTarget.value = billAmt.value = billPin.value = ""; refreshWallet();
+        billMsg.className = "ok"; billMsg.textContent = `✅ Paid + ₦${(d.cashback_ngn || 0).toFixed(2)} Cashback (${d.reference})`; billTarget.value = billAmt.value = billPin.value = ""; refreshWallet();
     }
     async function doTransfer() {
         sendMsg.className = "err"; sendMsg.textContent = "";

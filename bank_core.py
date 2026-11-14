@@ -12,6 +12,7 @@ from bank_accounts import (
     update_security_settings,
     verify_secret,
 )
+from bank_security import get_security_logs, verify_transaction_guard
 
 def lookup_recipient(conn, account_number: str, bank_name: str = "Securemonie MFB"):
     acct = account_number.strip()
@@ -33,7 +34,7 @@ def add_money(conn, customer_id: int, amount_ngn: float, pin: str, when: str = N
         return {"ok": False, "error": "Amount must be positive"}
     cur = conn.cursor()
     if not check_pin(cur, customer_id, pin):
-        return {"ok": False, "error": "Incorrect 4-digit PIN"}
+        return {"ok": False, "error": "Incorrect or locked 4-digit PIN"}
     ref = "SCM-" + secrets.token_hex(5).upper()
     ts = when or datetime.now().strftime("%d %b %Y, %H:%M")
     cur.execute("UPDATE customers SET wallet_kobo = wallet_kobo + ? WHERE id = ?", (kobo, customer_id))
@@ -45,16 +46,19 @@ def send_transfer(conn, sender_id: int, recipient_acct: str, bank_name: str, amo
     kobo = round(amount_ngn * 100)
     if kobo <= 0:
         return {"ok": False, "error": "Amount must be positive"}
+    guard_err = verify_transaction_guard(conn, sender_id, kobo)
+    if guard_err:
+        return {"ok": False, "error": guard_err}
+
     cur = conn.cursor()
-    cur.execute("SELECT full_name, account_number, pin_hash, wallet_kobo, daily_limit_kobo FROM customers WHERE id = ?", (sender_id,))
+    if not check_pin(cur, sender_id, pin):
+        return {"ok": False, "error": "Incorrect or locked 4-digit PIN"}
+
+    cur.execute("SELECT full_name, account_number, wallet_kobo FROM customers WHERE id = ?", (sender_id,))
     s = cur.fetchone()
     if not s:
         return {"ok": False, "error": "Sender not found"}
-    s_name, s_acct, pin_hash, s_bal, limit_kobo = s
-    if not verify_secret(pin, pin_hash):
-        return {"ok": False, "error": "Incorrect 4-digit PIN"}
-    if kobo > limit_kobo:
-        return {"ok": False, "error": f"Exceeds your ₦{limit_kobo / 100:,.0f} daily transfer limit"}
+    s_name, s_acct, s_bal = s
     if s_bal < kobo:
         return {"ok": False, "error": "Insufficient wallet balance"}
 
@@ -86,9 +90,13 @@ def pay_bill_or_airtime(conn, customer_id: int, service: str, target: str, amoun
     kobo = round(amount_ngn * 100)
     if kobo <= 0:
         return {"ok": False, "error": "Amount must be positive"}
+    guard_err = verify_transaction_guard(conn, customer_id, kobo)
+    if guard_err:
+        return {"ok": False, "error": guard_err}
+
     cur = conn.cursor()
     if not check_pin(cur, customer_id, pin):
-        return {"ok": False, "error": "Incorrect 4-digit PIN"}
+        return {"ok": False, "error": "Incorrect or locked 4-digit PIN"}
     cur.execute("SELECT wallet_kobo FROM customers WHERE id = ?", (customer_id,))
     row = cur.fetchone()
     if not row:
@@ -106,12 +114,15 @@ def pay_bill_or_airtime(conn, customer_id: int, service: str, target: str, amoun
 def vault_action(conn, customer_id: int, action: str, amount_ngn: float, pin: str, when: str = None):
     cur = conn.cursor()
     if not check_pin(cur, customer_id, pin):
-        return {"ok": False, "error": "Incorrect 4-digit PIN"}
-    cur.execute("SELECT wallet_kobo, vault_kobo FROM customers WHERE id = ?", (customer_id,))
+        return {"ok": False, "error": "Incorrect or locked 4-digit PIN"}
+    cur.execute("SELECT wallet_kobo, vault_kobo, account_frozen FROM customers WHERE id = ?", (customer_id,))
     row = cur.fetchone()
     if not row:
         return {"ok": False, "error": "Customer not found"}
-    w_kobo, v_kobo = row
+    w_kobo, v_kobo, frozen = row
+    if frozen and action == "withdraw":
+        return {"ok": False, "error": "Account is frozen. Unfreeze it in Security Settings first."}
+
     ref = "SAV-" + secrets.token_hex(4).upper()
     ts = when or datetime.now().strftime("%d %b %Y, %H:%M")
 
@@ -137,15 +148,23 @@ def vault_action(conn, customer_id: int, action: str, amount_ngn: float, pin: st
     return {"ok": True, "reference": ref}
 
 def get_account_summary(conn, customer_id: int):
+    init_bank_db(conn)
     cur = conn.cursor()
     cur.execute(
-        "SELECT full_name, phone, email, account_type, business_name, cac_rc_number, id_type, selfie_data, account_number, kyc_tier, daily_limit_kobo, wallet_kobo, vault_kobo FROM customers WHERE id = ?",
+        """SELECT full_name, phone, email, account_type, business_name, cac_rc_number, id_type,
+           selfie_data, account_number, kyc_tier, daily_limit_kobo, single_limit_kobo,
+           account_frozen, hide_bal_default, wallet_kobo, vault_kobo
+           FROM customers WHERE id = ?""",
         (customer_id,),
     )
     row = cur.fetchone()
     if not row:
         return None
-    name, phone, email, acct_type, biz_name, cac_rc, id_type, selfie, acct_num, tier, limit_kobo, w_kobo, v_kobo = row
+    (
+        name, phone, email, acct_type, biz_name, cac_rc, id_type,
+        selfie, acct_num, tier, limit_kobo, single_kobo,
+        frozen, hide_bal, w_kobo, v_kobo,
+    ) = row
     cur.execute("SELECT reference, title, bank_name, kind, amount_kobo, created_at FROM ledger WHERE customer_id = ? ORDER BY id DESC LIMIT 30", (customer_id,))
     rows = cur.fetchall()
     txs = [{"ref": r, "title": t, "bank": b, "kind": k, "amount": a / 100, "time": tm} for r, t, b, k, a, tm in rows]
@@ -163,9 +182,13 @@ def get_account_summary(conn, customer_id: int):
         "account_number": acct_num,
         "kyc_tier": tier,
         "daily_limit_ngn": limit_kobo / 100,
+        "single_limit_ngn": (single_kobo or limit_kobo) / 100,
+        "account_frozen": bool(frozen),
+        "hide_bal_default": bool(hide_bal),
         "wallet_ngn": w_kobo / 100,
         "vault_ngn": v_kobo / 100,
         "money_in_ngn": money_in,
         "money_out_ngn": money_out,
+        "security_logs": get_security_logs(conn, customer_id),
         "transactions": txs,
     }

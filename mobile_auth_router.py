@@ -11,6 +11,7 @@ from bank_core import (
     reset_forgotten_passcode,
     update_security_settings,
 )
+from bank_security import log_security_event
 from db_adapter import get_db_connection
 
 auth_router = APIRouter()
@@ -47,8 +48,8 @@ class CacReq(BaseModel):
     pin: str = Field(pattern=r"^\d{4}$")
 
 class SettingReq(BaseModel):
-    setting: Literal["kyc", "limit", "pin", "password"]
-    new_value: str = Field(min_length=1, max_length=64)
+    setting: Literal["kyc", "limit", "single_limit", "pin", "password", "freeze", "privacy"]
+    new_value: str = Field(default="toggle", max_length=64)
     password: str = Field(pattern=r"^\d{6}$")
 
 def get_db():
@@ -91,6 +92,9 @@ def api_login(req: LoginReq):
     if not user:
         conn.close()
         raise HTTPException(status_code=401, detail="Wrong 6-digit passcode")
+    if "locked" in user:
+        conn.close()
+        raise HTTPException(status_code=423, detail=user["locked"])
     summary = get_account_summary(conn, user["id"])
     conn.close()
     tok = secrets.token_urlsafe(32)
@@ -125,3 +129,15 @@ def api_settings(req: SettingReq, authorization: Optional[str] = Header(None)):
     if not res["ok"]:
         raise HTTPException(status_code=400, detail=res["error"])
     return res
+
+@auth_router.post("/api/logout-all")
+def api_logout_all(authorization: Optional[str] = Header(None)):
+    import mobile_server
+    u = auth_user(authorization)
+    uid = u["id"]
+    for t in [k for k, v in mobile_server.SESSIONS.items() if v["id"] == uid]:
+        mobile_server.SESSIONS.pop(t, None)
+    conn = get_db()
+    log_security_event(conn, uid, "Signed Out From All Devices", "ALERT")
+    conn.close()
+    return {"status": "all_sessions_revoked"}

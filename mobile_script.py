@@ -25,6 +25,15 @@ EXTRAS_JS = """
         };
         recentTxBox.replaceChildren(...d.transactions.slice(0, 2).map(makeTxRow));
         txList.replaceChildren(...d.transactions.map(makeTxRow));
+        secLogList.replaceChildren(...(d.security_logs || []).map(l => {
+            const row = Object.assign(document.createElement("div"), { className:"tx" });
+            const color = l.status === "ALERT" ? "#fb7185" : "#34d399";
+            row.append(
+                Object.assign(document.createElement("span"), { textContent:l.event }),
+                Object.assign(document.createElement("small"), { textContent:l.time, style:`color:${color};font-weight:600;` })
+            );
+            return row;
+        }));
     }
     async function issueCard() {
         const res = await fetch("/api/cards", { method:"POST", headers:headers(), body:JSON.stringify({ currency:cardCur.value }) });
@@ -51,15 +60,31 @@ EXTRAS_JS = """
         alert(`Card Number: ${d.card_number}\\nExpiry: ${d.expiry}\\nCVV: ${d.cvv}`);
     }
     function updateSettingHint() {
-        const map = { kyc:"Enter 11-Digit BVN or NIN", limit:"Enter New Daily Limit in Naira (e.g. 50000)", pin:"Enter New 4-Digit PIN", password:"Enter New 6-Digit Login Passcode" };
+        const map = {
+            kyc:"Enter 11-Digit BVN or NIN",
+            limit:"Enter New 24-Hour Limit in Naira (e.g. 50000)",
+            single_limit:"Enter Max Per-Transfer Cap in Naira (e.g. 20000)",
+            pin:"Enter New 4-Digit PIN (Also Unlocks Locked PIN)",
+            password:"Enter New 6-Digit Login Passcode",
+            freeze:"Type FREEZE (No value needed—just verify 6-digit passcode below)",
+            privacy:"Type TOGGLE (No value needed—just verify 6-digit passcode below)"
+        };
+        const noVal = settingType.value === "freeze" || settingType.value === "privacy";
+        settingNewVal.style.display = noVal ? "none" : "block";
+        settingNewVal.value = noVal ? "toggle" : "";
         settingNewVal.placeholder = map[settingType.value] || "";
     }
     async function saveSetting() {
         setMsg.className = "err"; setMsg.textContent = "";
-        const res = await fetch("/api/settings", { method:"POST", headers:headers(), body:JSON.stringify({ setting:settingType.value, new_value:settingNewVal.value, password:settingPass.value }) });
+        const val = (settingType.value === "freeze" || settingType.value === "privacy") ? "toggle" : settingNewVal.value;
+        const res = await fetch("/api/settings", { method:"POST", headers:headers(), body:JSON.stringify({ setting:settingType.value, new_value:val, password:settingPass.value }) });
         const d = await res.json();
         if (!res.ok) return setMsg.textContent = d.detail || "Update failed";
-        setMsg.className = "ok"; setMsg.textContent = "✅ Security setting updated!"; settingNewVal.value = settingPass.value = ""; refreshWallet();
+        setMsg.className = "ok"; setMsg.textContent = "✅ Security setting updated!"; settingNewVal.value = settingPass.value = ""; updateSettingHint(); refreshWallet();
+    }
+    async function logoutAllDevices() {
+        await fetch("/api/logout-all", { method:"POST", headers:headers() });
+        lockApp("🚫 Signed out from all devices");
     }
     async function getPdf() {
         const res = await fetch("/api/statement/pdf", { headers:headers() });

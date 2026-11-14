@@ -1,5 +1,5 @@
 WALLET_JS = """
-    let hideBal = false, rawBal = 0, curAcct = "";
+    let hideBal = true, rawBal = 0, curAcct = "";
     function enterApp() {
         quickUnlockBox.style.display = "none"; loginBox.style.display = "none"; signupWizard.style.display = "none"; forgotBox.style.display = "none";
         appShell.style.display = "block"; bottomTabs.style.display = "flex"; topActions.style.display = "flex"; lvlBadge.style.display = "inline-flex";
@@ -32,7 +32,9 @@ WALLET_JS = """
         const res = await fetch("/api/wallet", { headers:headers() });
         if (res.status === 401) return lockApp("Session expired");
         const d = await res.json();
-        rawBal = d.wallet_ngn; curAcct = d.account_number; saveDeviceProfile(d.full_name, d.phone, d.selfie_data);
+        rawBal = d.wallet_ngn; curAcct = d.account_number;
+        if (typeof d.hide_bal_default === "boolean") hideBal = d.hide_bal_default;
+        saveDeviceProfile(d.full_name, d.phone, d.selfie_data);
         if (d.selfie_data) {
             topSelfieImg.src = settingsSelfieImg.src = d.selfie_data;
             topSelfieImg.style.display = settingsSelfieImg.style.display = "block";
@@ -47,7 +49,9 @@ WALLET_JS = """
         todoCount.textContent = d.kyc_tier >= 3 ? "3/3 Completed" : `${d.kyc_tier}/3`;
         todoTitle.textContent = d.kyc_tier >= 3 ? "Maximum Tier 3 KYC Verified" : "Upgrade KYC Level & Daily Limit";
         if (d.cac_rc_number) cacStatus.textContent = `✅ Registered Business: ${d.business_name} (${d.cac_rc_number})`;
-        profileInfo.textContent = `${d.full_name} • ${d.phone} • Level ${d.kyc_tier} (Limit: ₦${d.daily_limit_ngn.toLocaleString()})`;
+        acctStatusText.textContent = d.account_frozen ? "❄️ ACCOUNT FROZEN (Outgoing Blocked)" : "✅ ACTIVE & PROTECTED";
+        acctStatusText.style.color = d.account_frozen ? "#fb7185" : "#34d399";
+        profileInfo.textContent = `${d.full_name} • Level ${d.kyc_tier} • Daily: ₦${d.daily_limit_ngn.toLocaleString()} • Single Cap: ₦${(d.single_limit_ngn || d.daily_limit_ngn).toLocaleString()}`;
         renderCardsAndTx(d);
     }
     async function checkAcct() {

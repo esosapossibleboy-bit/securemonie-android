@@ -1,21 +1,19 @@
-import hashlib
-import hmac
 import random
-import secrets
-
-TIER_LIMITS_NGN = {1: 50_000.0, 2: 200_000.0, 3: 5_000_000.0}
-
-def hash_secret(value: str, salt: str = None) -> str:
-    if salt is None:
-        salt = secrets.token_hex(16)
-    dk = hashlib.pbkdf2_hmac("sha256", value.encode(), salt.encode(), 100_000)
-    return f"{salt}${dk.hex()}"
-
-def verify_secret(value: str, stored: str) -> bool:
-    if not stored or "$" not in stored:
-        return False
-    salt, _ = stored.split("$", 1)
-    return hmac.compare_digest(hash_secret(value, salt), stored)
+from bank_security import (
+    check_login_lockout,
+    init_security_tables,
+    log_security_event,
+    record_login_attempt,
+    record_pin_attempt,
+)
+from bank_settings import (
+    TIER_LIMITS_NGN,
+    check_pin,
+    hash_secret,
+    register_cac_business,
+    update_security_settings,
+    verify_secret,
+)
 
 def init_bank_db(conn):
     cur = conn.cursor()
@@ -64,6 +62,7 @@ def init_bank_db(conn):
         )
     """)
     conn.commit()
+    init_security_tables(conn)
 
 def register_customer(
     conn,
@@ -103,19 +102,21 @@ def register_customer(
             INSERT INTO customers (
                 full_name, phone, email, account_type, business_name, business_category,
                 address, id_type, pep_status, revenue_source, selfie_data, account_number,
-                password_hash, pin_hash, kyc_tier, daily_limit_kobo
+                password_hash, pin_hash, kyc_tier, daily_limit_kobo, single_limit_kobo
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 full_name.strip(), phone.strip(), email.lower().strip(), acct_kind,
                 business_name.strip(), business_category.strip(), address.strip(),
                 id_type.strip(), pep_status.strip(), revenue_source.strip(), selfie_data.strip(),
-                acct, hash_secret(password), hash_secret(pin), tier, limit_kobo,
+                acct, hash_secret(password), hash_secret(pin), tier, limit_kobo, limit_kobo,
             ),
         )
         conn.commit()
-        return {"id": cur.lastrowid, "full_name": full_name.strip(), "account_number": acct, "kyc_tier": tier}
+        cid = cur.lastrowid
+        log_security_event(conn, cid, f"Account Opened (Tier {tier})", "SUCCESS")
+        return {"id": cid, "full_name": full_name.strip(), "account_number": acct, "kyc_tier": tier}
     except Exception:
         if hasattr(conn, "rollback"):
             conn.rollback()
@@ -133,7 +134,14 @@ def login_customer(conn, identifier: str, password: str):
     if not row:
         return None
     cid, name, acct, pw_hash = row
-    return {"id": cid, "full_name": name, "account_number": acct} if verify_secret(password, pw_hash) else None
+    lock_err = check_login_lockout(conn, cid)
+    if lock_err:
+        return {"locked": lock_err}
+    if verify_secret(password, pw_hash):
+        record_login_attempt(conn, cid, True)
+        return {"id": cid, "full_name": name, "account_number": acct}
+    record_login_attempt(conn, cid, False)
+    return None
 
 def reset_forgotten_passcode(conn, identifier: str, transaction_pin: str, new_passcode: str):
     init_bank_db(conn)
@@ -145,56 +153,9 @@ def reset_forgotten_passcode(conn, identifier: str, transaction_pin: str, new_pa
         return {"ok": False, "error": "Account not found for that phone or email"}
     cid, pin_hash = row
     if not verify_secret(transaction_pin, pin_hash):
+        record_pin_attempt(conn, cid, False)
         return {"ok": False, "error": "Incorrect 4-digit Transaction PIN"}
-    cur.execute("UPDATE customers SET password_hash = ? WHERE id = ?", (hash_secret(new_passcode), cid))
+    cur.execute("UPDATE customers SET password_hash = ?, failed_logins = 0, locked_until = 0 WHERE id = ?", (hash_secret(new_passcode), cid))
     conn.commit()
-    return {"ok": True}
-
-def register_cac_business(conn, customer_id: int, business_name: str, category: str, pin: str):
-    cur = conn.cursor()
-    if not check_pin(cur, customer_id, pin):
-        return {"ok": False, "error": "Incorrect 4-digit Transaction PIN"}
-    bn_code = "BN-" + "".join(str(random.randint(0, 9)) for _ in range(7))
-    cur.execute(
-        "UPDATE customers SET account_type = 'Business', business_name = ?, business_category = ?, cac_rc_number = ? WHERE id = ?",
-        (business_name.strip(), category.strip(), bn_code, customer_id),
-    )
-    conn.commit()
-    return {"ok": True, "cac_number": bn_code}
-
-def check_pin(cur, customer_id: int, pin: str) -> bool:
-    cur.execute("SELECT pin_hash FROM customers WHERE id = ?", (customer_id,))
-    row = cur.fetchone()
-    if not row:
-        return False
-    (pin_hash,) = row
-    return verify_secret(pin, pin_hash)
-
-def update_security_settings(conn, customer_id: int, setting: str, password: str, new_value: str):
-    cur = conn.cursor()
-    cur.execute("SELECT password_hash, kyc_tier FROM customers WHERE id = ?", (customer_id,))
-    row = cur.fetchone()
-    if not row:
-        return {"ok": False, "error": "Account not found"}
-    pw_hash, tier = row
-    if not verify_secret(password, pw_hash):
-        return {"ok": False, "error": "Incorrect 6-digit passcode"}
-
-    if setting == "pin":
-        cur.execute("UPDATE customers SET pin_hash = ? WHERE id = ?", (hash_secret(new_value), customer_id))
-    elif setting == "password":
-        cur.execute("UPDATE customers SET password_hash = ? WHERE id = ?", (hash_secret(new_value), customer_id))
-    elif setting == "kyc":
-        if len(new_value.strip()) != 11 or not new_value.strip().isdigit():
-            return {"ok": False, "error": "Enter a valid 11-digit BVN or NIN"}
-        next_tier = min(3, tier + 1)
-        new_limit = int(TIER_LIMITS_NGN[next_tier] * 100)
-        cur.execute("UPDATE customers SET kyc_tier = ?, daily_limit_kobo = ? WHERE id = ?", (next_tier, new_limit, customer_id))
-    elif setting == "limit":
-        limit_ngn = float(new_value)
-        max_allowed = TIER_LIMITS_NGN.get(tier, 50_000.0)
-        if limit_ngn <= 0 or limit_ngn > max_allowed:
-            return {"ok": False, "error": f"Tier {tier} limit must be between ₦1 and ₦{max_allowed:,.0f}"}
-        cur.execute("UPDATE customers SET daily_limit_kobo = ? WHERE id = ?", (int(limit_ngn * 100), customer_id))
-    conn.commit()
+    log_security_event(conn, cid, "Login Passcode Reset via PIN", "SUCCESS")
     return {"ok": True}

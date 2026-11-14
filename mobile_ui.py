@@ -2,6 +2,7 @@ from android_pwa import LOGO_SVG
 from mobile_auth_html import AUTH_HTML
 from mobile_script import MOBILE_JS
 from mobile_styles import MOBILE_CSS
+from mobile_tabs_html import TABS_HTML
 
 def render_mobile_app() -> str:
     return f"""<!DOCTYPE html>
@@ -20,8 +21,15 @@ def render_mobile_app() -> str:
 </head>
 <body>
     <div class="app-bar">
-        <div class="brand">{LOGO_SVG}<span>Securemonie</span></div>
-        <button id="logoutBtn" class="btn-dark" style="display:none;width:auto;margin:0;padding:7px 12px;font-size:0.82rem;" onclick="lockApp()">Lock App</button>
+        <div style="display:flex;align-items:center;gap:8px;">
+            <img id="topSelfieImg" style="display:none;width:34px;height:34px;border-radius:50%;object-fit:cover;border:2px solid #f59e0b;" />
+            <div id="brandLogo" class="brand">{LOGO_SVG}<span>Securemonie</span></div>
+            <span id="lvlBadge" class="lvl-pill" style="display:none;">🏅 Level 1</span>
+        </div>
+        <div id="topActions" style="display:none;gap:8px;align-items:center;">
+            <button type="button" class="btn-dark" style="width:auto;margin:0;padding:6px 10px;font-size:0.85rem;" onclick="openPanel('panelSettings')">🎧</button>
+            <button type="button" class="btn-dark" style="width:auto;margin:0;padding:6px 10px;font-size:0.82rem;" onclick="lockApp()">🔒 Lock</button>
+        </div>
     </div>
 
     <div class="wrap">
@@ -29,114 +37,72 @@ def render_mobile_app() -> str:
         <div id="appShell" style="display:none;">
             <div id="tabHome">
                 <div class="hero">
-                    <div style="display:flex;justify-content:space-between;align-items:center;">
-                        <span id="greetText" style="font-weight:700;"></span>
-                        <span id="tierBadge" class="badge">TIER 1</span>
+                    <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.88rem;opacity:0.95;">
+                        <span id="acctHeaderText">8100000000 | Customer</span>
+                        <button type="button" onclick="copyAcct()" style="width:auto;margin:0;padding:3px 9px;background:rgba(255,255,255,0.2);font-size:0.75rem;">📋 Copy</button>
                     </div>
-                    <div class="bal">
+                    <div class="bal-row">
                         <span id="balText">₦0.00</span>
-                        <button type="button" onclick="toggleBal()" style="width:auto;margin:0;padding:4px 10px;background:rgba(255,255,255,0.18);font-size:0.85rem;">👁️</button>
+                        <button type="button" onclick="toggleBal()" style="width:auto;margin:0;padding:4px 8px;background:none;font-size:1.1rem;">👁️</button>
                     </div>
-                    <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.88rem;">
-                        <span>Acct: <strong id="acctText"></strong></span>
-                        <button type="button" onclick="copyAcct()" style="width:auto;margin:0;padding:4px 10px;background:#f59e0b;color:#111827;font-size:0.78rem;">Copy</button>
+                    <div style="font-size:0.78rem;opacity:0.85;">Last updated just now</div>
+                    <div class="hero-actions">
+                        <button type="button" class="pill-btn" onclick="openPanel('panelTopup')">+ Add Money</button>
+                        <button type="button" class="pill-btn" onclick="openPanel('panelHistory')">🕒 History</button>
                     </div>
                 </div>
-                <div class="card">
-                    <h3 style="margin-top:0;">💳 Fund Wallet & Pay Bills</h3>
-                    <input id="topupAmt" type="number" inputmode="decimal" placeholder="Top-Up Amount (₦)" />
-                    <input id="topupPin" type="password" inputmode="numeric" maxlength="4" placeholder="Enter 4-Digit PIN" />
-                    <button class="btn-gold" onclick="doTopup()">+ Add Money Instantly</button>
-                    <hr style="border-color:#222f52;margin:14px 0;" />
-                    <select id="billSvc"><option value="MTN Airtime">MTN Airtime</option><option value="Airtel Data">Airtel Data</option><option value="Glo Airtime">Glo Airtime</option><option value="IKEDC Prepaid">IKEDC Electricity</option></select>
-                    <input id="billTarget" placeholder="Phone Number or Meter Number" />
-                    <input id="billAmt" type="number" inputmode="decimal" placeholder="Bill Amount (₦)" />
-                    <input id="billPin" type="password" inputmode="numeric" maxlength="4" placeholder="Enter 4-Digit PIN" />
-                    <button class="btn-dark" onclick="doBill()">Pay Airtime / Bill</button>
-                    <p id="homeMsg" class="err"></p>
-                </div>
-            </div>
 
-            <div id="tabSend" style="display:none;">
                 <div class="card">
-                    <h3 style="margin-top:0;">💸 Transfer Money</h3>
-                    <select id="bankSelect" onchange="checkAcct()">
-                        <option value="Securemonie MFB">Securemonie MFB (Instant & Free)</option>
-                        <option value="GTBank">GTBank</option><option value="Access Bank">Access Bank</option>
-                        <option value="Zenith Bank">Zenith Bank</option><option value="UBA">UBA</option>
-                        <option value="FirstBank">FirstBank</option><option value="OPay">OPay</option>
-                    </select>
-                    <input id="toAcct" maxlength="10" inputmode="numeric" placeholder="10-Digit Account Number" oninput="checkAcct()" />
-                    <div id="recipPreview" class="ok"></div>
-                    <input id="sendAmt" type="number" inputmode="decimal" placeholder="Amount (₦)" />
-                    <input id="sendNote" maxlength="50" placeholder="Narration (Optional)" />
-                    <input id="sendPin" type="password" inputmode="numeric" maxlength="4" placeholder="Enter 4-Digit Transaction PIN" />
-                    <button onclick="doTransfer()">Send Money</button>
-                    <p id="sendMsg" class="err"></p>
-                </div>
-            </div>
-
-            <div id="tabVault" style="display:none;">
-                <div class="card">
-                    <h3 style="margin-top:0;">🌱 Target Savings Vault (15% p.a.)</h3>
-                    <div style="font-size:1.6rem;font-weight:800;color:#fbbf24;margin-bottom:8px;">Saved: <span id="vaultText">₦0.00</span></div>
-                    <input id="vaultAmt" type="number" inputmode="decimal" placeholder="Amount (₦)" />
-                    <input id="vaultPin" type="password" inputmode="numeric" maxlength="4" placeholder="Enter 4-Digit PIN" />
-                    <button class="btn-gold" onclick="doVault('save')">Save to Target Vault</button>
-                    <button class="btn-dark" onclick="doVault('withdraw')">Withdraw to Main Wallet</button>
-                    <button class="btn-dark" onclick="doVault('interest')">✨ Simulate 30-Day Interest</button>
-                    <p id="vaultMsg" class="err"></p>
-                </div>
-            </div>
-
-            <div id="tabCards" style="display:none;">
-                <div class="card">
-                    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-                        <h3 style="margin:0;">💳 Virtual Cards</h3>
-                        <button class="btn-gold" style="width:auto;margin:0;padding:8px 12px;font-size:0.82rem;" onclick="issueCard()">+ New Card</button>
+                    <div class="sec-head" style="margin-top:0;"><span>Services</span><button type="button" class="sec-link" onclick="openTab('Services')">View All</button></div>
+                    <div class="svc-grid">
+                        <button type="button" class="svc-item" onclick="openPanel('panelTransfer')"><span class="svc-icon">⇄</span>Transfer</button>
+                        <button type="button" class="svc-item" onclick="openBillService('MTN Airtime')"><span class="svc-icon">📞</span>Airtime</button>
+                        <button type="button" class="svc-item" onclick="openBillService('Airtel Data')"><span class="svc-icon">📶</span>Data</button>
+                        <button type="button" class="svc-item" onclick="openBillService('Bet9ja Wallet')"><span class="svc-icon">⚽</span>Betting</button>
+                        <button type="button" class="svc-item" onclick="openPanel('panelVault')"><span class="svc-icon">🐷</span>Savings</button>
+                        <button type="button" class="svc-item" onclick="openBillService('WAEC / JAMB PIN')"><span class="svc-icon">🎓</span>Education</button>
+                        <button type="button" class="svc-item" onclick="getPdf()"><span class="svc-icon">📄</span>Statement</button>
+                        <button type="button" class="svc-item" onclick="openTab('Services')"><span class="svc-icon">⊞</span>More</button>
                     </div>
-                    <select id="cardCur"><option value="NGN">Verve Naira Card (₦)</option><option value="USD">Visa Dollar Card ($)</option></select>
-                    <p id="cardMsg" class="err"></p>
-                    <div id="cardsList"></div>
                 </div>
-            </div>
 
-            <div id="tabHistory" style="display:none;">
                 <div class="card">
-                    <div style="display:flex;justify-content:space-between;align-items:center;">
-                        <h3 style="margin:0;">🧾 Bank Statement</h3>
-                        <button class="btn-gold" style="width:auto;margin:0;padding:8px 12px;font-size:0.82rem;" onclick="getPdf()">📄 PDF</button>
+                    <div class="sec-head" style="margin-top:0;"><span>Rewards</span><button type="button" class="sec-link" onclick="openTab('Rewards')">See All</button></div>
+                    <div class="two-col">
+                        <div class="mini-box"><div style="font-size:0.82rem;color:#94a3b8;">🪙 Cashback</div><div style="font-weight:800;font-size:1.05rem;margin-top:4px;">₦0.00</div></div>
+                        <div class="mini-box"><div style="font-size:0.82rem;color:#94a3b8;">📣 Referrals</div><div style="font-weight:800;font-size:1.05rem;margin-top:4px;">₦0.00</div></div>
                     </div>
-                    <div id="txList" style="margin-top:10px;"></div>
+                    <div class="sec-head"><span>Your to-do list</span><button type="button" class="sec-link" onclick="openPanel('panelSettings')">See All</button></div>
+                    <div class="mini-box" onclick="openPanel('panelSettings')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
+                        <div><div id="todoCount" style="font-size:0.78rem;color:#fbbf24;font-weight:700;">2/3</div><div id="todoTitle" style="font-weight:700;font-size:0.9rem;">Upgrade KYC Tier & Daily Limits</div></div>
+                        <span>›</span>
+                    </div>
                 </div>
-            </div>
 
-            <div id="tabSettings" style="display:none;">
                 <div class="card">
-                    <h3 style="margin-top:0;">⚙️ Account & Security Settings</h3>
-                    <div id="profileInfo" style="font-size:0.9rem;color:#cbd5e1;line-height:1.6;margin-bottom:10px;"></div>
-                    <select id="settingType" onchange="updateSettingHint()">
-                        <option value="kyc">Upgrade KYC Tier (Enter 11-Digit BVN/NIN)</option>
-                        <option value="limit">Set Custom Daily Transfer Limit (₦)</option>
-                        <option value="pin">Change 4-Digit Transaction PIN</option>
-                        <option value="password">Change 6-Digit Login Passcode</option>
-                    </select>
-                    <input id="settingNewVal" placeholder="Enter 11-Digit BVN or NIN" />
-                    <input id="settingPass" type="password" maxlength="6" inputmode="numeric" placeholder="Verify Current 6-Digit Passcode" />
-                    <button onclick="saveSetting()">Save Security Setting</button>
-                    <p id="setMsg" class="err"></p>
+                    <div class="sec-head" style="margin-top:0;"><span>Recent transactions</span><button type="button" class="sec-link" onclick="openPanel('panelHistory')">View All</button></div>
+                    <div id="recentTxBox"></div>
+                    <div class="sec-head"><span>Finances</span></div>
+                    <div class="mini-box" onclick="openPanel('panelVault')" style="cursor:pointer;">
+                        <div style="font-size:0.8rem;color:#94a3b8;">🌱 Savings Vault</div>
+                        <div style="font-weight:700;font-size:0.92rem;margin-top:4px;">Create a savings plan and get up to <span style="color:#34d399;">18.0% interest</span> per annum</div>
+                    </div>
+                    <div class="sec-head"><span>Spending trends</span><span style="font-size:0.78rem;color:#fbbf24;">All Time</span></div>
+                    <div class="two-col">
+                        <div class="mini-box"><div style="font-size:0.8rem;color:#34d399;">↓ Money in</div><div id="moneyInText" style="font-weight:800;margin-top:4px;">₦0.00</div></div>
+                        <div class="mini-box"><div style="font-size:0.8rem;color:#fb7185;">↑ Money out</div><div id="moneyOutText" style="font-weight:800;margin-top:4px;">₦0.00</div></div>
+                    </div>
                 </div>
             </div>
+            {TABS_HTML}
         </div>
     </div>
 
     <div id="bottomTabs" class="tab-bar" style="display:none;">
         <button id="btnHome" class="tab-btn active" onclick="openTab('Home')">🏠<br/>Home</button>
-        <button id="btnSend" class="tab-btn" onclick="openTab('Send')">💸<br/>Transfer</button>
-        <button id="btnVault" class="tab-btn" onclick="openTab('Vault')">🌱<br/>Savings</button>
-        <button id="btnCards" class="tab-btn" onclick="openTab('Cards')">💳<br/>Cards</button>
-        <button id="btnHistory" class="tab-btn" onclick="openTab('History')">🧾<br/>History</button>
-        <button id="btnSettings" class="tab-btn" onclick="openTab('Settings')">⚙️<br/>Settings</button>
+        <button id="btnCard" class="tab-btn" onclick="openTab('Card')">💳<br/>Card</button>
+        <button id="btnServices" class="tab-btn" onclick="openTab('Services')">⊞<br/>Services</button>
+        <button id="btnRewards" class="tab-btn" onclick="openTab('Rewards')">🏆<br/>Rewards & Me</button>
     </div>
     {MOBILE_JS}
 </body>

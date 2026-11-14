@@ -33,7 +33,7 @@ AUTH_HTML = f"""
                 <button type="button" class="key-btn key-submit" onclick="submitKeypad()">→</button>
             </div>
             <p id="keypadMsg" class="err"></p>
-            <div style="margin-top:6px;"><a href="#" onclick="switchToFullLogin();return false;" style="color:#fbbf24;text-decoration:none;font-weight:700;font-size:0.92rem;">Forgot passcode?</a></div>
+            <div style="margin-top:6px;"><a href="#" onclick="openForgotBox();return false;" style="color:#fbbf24;text-decoration:none;font-weight:700;font-size:0.92rem;">Forgot passcode?</a></div>
         </div>
 
         <form id="loginBox" class="card" autocomplete="off" onsubmit="return false;">
@@ -43,7 +43,18 @@ AUTH_HTML = f"""
             <input id="loginPass" type="password" maxlength="6" inputmode="numeric" placeholder="6-Digit Login Passcode" />
             <button type="button" onclick="submitLogin()">Sign In</button>
             <button type="button" class="btn-dark" onclick="openSignupWizard()">Open a Free Securemonie Account</button>
+            <div style="text-align:center;margin-top:10px;"><a href="#" onclick="openForgotBox();return false;" style="color:#fbbf24;font-size:0.88rem;text-decoration:none;font-weight:600;">Forgot 6-Digit Passcode?</a></div>
             <p id="loginMsg" class="err"></p>
+        </form>
+
+        <form id="forgotBox" class="card" style="display:none;" autocomplete="off" onsubmit="return false;">
+            <h3 style="margin-top:0;">🔑 Reset 6-Digit Passcode</h3>
+            <input id="fgIdent" placeholder="Registered Phone Number or Email" />
+            <input id="fgPin" type="password" maxlength="4" inputmode="numeric" placeholder="Verify 4-Digit Transaction PIN" />
+            <input id="fgNewPass" type="password" maxlength="6" inputmode="numeric" placeholder="New 6-Digit Login Passcode" />
+            <button type="button" class="btn-gold" onclick="submitForgot()">Reset Passcode</button>
+            <button type="button" class="btn-dark" onclick="switchToFullLogin()">Back to Sign In</button>
+            <p id="fgMsg" class="err"></p>
         </form>
         {SIGNUP_WIZARD_HTML}
 """

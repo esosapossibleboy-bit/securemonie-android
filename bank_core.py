@@ -6,7 +6,9 @@ from bank_accounts import (
     hash_secret,
     init_bank_db,
     login_customer,
+    register_cac_business,
     register_customer,
+    reset_forgotten_passcode,
     update_security_settings,
     verify_secret,
 )
@@ -127,31 +129,35 @@ def vault_action(conn, customer_id: int, action: str, amount_ngn: float, pin: st
         cur.execute("INSERT INTO ledger (reference, customer_id, title, bank_name, kind, amount_kobo, created_at) VALUES (?, ?, 'Vault Withdrawal', 'SecureVault', 'CREDIT', ?, ?)", (ref, customer_id, kobo, ts))
     elif action == "interest":
         if v_kobo <= 0:
-            return {"ok": False, "error": "Save money first to earn 15% interest"}
-        gain = max(1, round(v_kobo * 0.15 * (30 / 365)))
+            return {"ok": False, "error": "Save money first to earn 18% interest"}
+        gain = max(1, round(v_kobo * 0.18 * (30 / 365)))
         cur.execute("UPDATE customers SET vault_kobo = vault_kobo + ? WHERE id = ?", (gain, customer_id))
-        cur.execute("INSERT INTO ledger (reference, customer_id, title, bank_name, kind, amount_kobo, created_at) VALUES (?, ?, '30-Day Vault Interest (15% p.a.)', 'SecureVault', 'CREDIT', ?, ?)", (ref, customer_id, gain, ts))
+        cur.execute("INSERT INTO ledger (reference, customer_id, title, bank_name, kind, amount_kobo, created_at) VALUES (?, ?, '30-Day Vault Interest (18.0% p.a.)', 'SecureVault', 'CREDIT', ?, ?)", (ref, customer_id, gain, ts))
     conn.commit()
     return {"ok": True, "reference": ref}
 
 def get_account_summary(conn, customer_id: int):
     cur = conn.cursor()
     cur.execute(
-        "SELECT full_name, phone, email, account_type, business_name, id_type, selfie_data, account_number, kyc_tier, daily_limit_kobo, wallet_kobo, vault_kobo FROM customers WHERE id = ?",
+        "SELECT full_name, phone, email, account_type, business_name, cac_rc_number, id_type, selfie_data, account_number, kyc_tier, daily_limit_kobo, wallet_kobo, vault_kobo FROM customers WHERE id = ?",
         (customer_id,),
     )
     row = cur.fetchone()
     if not row:
         return None
-    name, phone, email, acct_type, biz_name, id_type, selfie, acct_num, tier, limit_kobo, w_kobo, v_kobo = row
+    name, phone, email, acct_type, biz_name, cac_rc, id_type, selfie, acct_num, tier, limit_kobo, w_kobo, v_kobo = row
     cur.execute("SELECT reference, title, bank_name, kind, amount_kobo, created_at FROM ledger WHERE customer_id = ? ORDER BY id DESC LIMIT 30", (customer_id,))
-    txs = [{"ref": r, "title": t, "bank": b, "kind": k, "amount": a / 100, "time": tm} for r, t, b, k, a, tm in cur.fetchall()]
+    rows = cur.fetchall()
+    txs = [{"ref": r, "title": t, "bank": b, "kind": k, "amount": a / 100, "time": tm} for r, t, b, k, a, tm in rows]
+    money_in = sum(a for _, _, _, k, a, _ in rows if k == "CREDIT") / 100
+    money_out = sum(a for _, _, _, k, a, _ in rows if k == "DEBIT") / 100
     return {
         "full_name": name,
         "phone": phone,
         "email": email,
         "account_type": acct_type,
         "business_name": biz_name,
+        "cac_rc_number": cac_rc,
         "id_type": id_type,
         "selfie_data": selfie,
         "account_number": acct_num,
@@ -159,5 +165,7 @@ def get_account_summary(conn, customer_id: int):
         "daily_limit_ngn": limit_kobo / 100,
         "wallet_ngn": w_kobo / 100,
         "vault_ngn": v_kobo / 100,
+        "money_in_ngn": money_in,
+        "money_out_ngn": money_out,
         "transactions": txs,
     }

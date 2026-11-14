@@ -1,36 +1,53 @@
 WALLET_JS = """
     let hideBal = false, rawBal = 0, curAcct = "";
     function enterApp() {
-        quickUnlockBox.style.display = "none"; loginBox.style.display = "none"; signupWizard.style.display = "none";
-        appShell.style.display = "block"; bottomTabs.style.display = "flex"; logoutBtn.style.display = "block";
+        quickUnlockBox.style.display = "none"; loginBox.style.display = "none"; signupWizard.style.display = "none"; forgotBox.style.display = "none";
+        appShell.style.display = "block"; bottomTabs.style.display = "flex"; topActions.style.display = "flex"; lvlBadge.style.display = "inline-flex";
         bumpIdle(); refreshWallet();
     }
     function lockApp(msg = "") {
         clearTimeout(idle); token = ""; localStorage.removeItem("sm_token");
+        topActions.style.display = "none"; lvlBadge.style.display = "none"; topSelfieImg.style.display = "none"; brandLogo.style.display = "flex";
         showQuickUnlock(msg);
     }
     function openTab(name) {
-        ["Home", "Send", "Vault", "Cards", "History", "Settings"].forEach(t => {
+        for (const t of Array.of("Home", "Card", "Services", "Rewards")) {
             document.getElementById("tab" + t).style.display = t === name ? "block" : "none";
             document.getElementById("btn" + t).className = "tab-btn" + (t === name ? " active" : "");
-        });
+        }
+    }
+    function openPanel(panelId) {
+        openTab(panelId === "panelSettings" ? "Rewards" : "Services");
+        const el = document.getElementById(panelId);
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    function openBillService(svcName) {
+        billSvc.value = svcName;
+        openPanel("panelBills");
     }
     function toggleBal() { hideBal = !hideBal; renderBal(); }
     function renderBal() { balText.textContent = hideBal ? "₦ ••••••" : ("₦" + rawBal.toLocaleString("en-NG", { minimumFractionDigits:2 })); }
-    function copyAcct() { navigator.clipboard?.writeText(curAcct); homeMsg.className = "ok"; homeMsg.textContent = "✅ Account number copied!"; }
+    function copyAcct() { navigator.clipboard?.writeText(curAcct); alert("✅ Account number copied: " + curAcct); }
     async function refreshWallet() {
         const res = await fetch("/api/wallet", { headers:headers() });
         if (res.status === 401) return lockApp("Session expired");
         const d = await res.json();
         rawBal = d.wallet_ngn; curAcct = d.account_number; saveDeviceProfile(d.full_name, d.phone, d.selfie_data);
         if (d.selfie_data) {
-            homeSelfieImg.src = settingsSelfieImg.src = d.selfie_data;
-            homeSelfieImg.style.display = settingsSelfieImg.style.display = "block";
+            topSelfieImg.src = settingsSelfieImg.src = d.selfie_data;
+            topSelfieImg.style.display = settingsSelfieImg.style.display = "block";
+            brandLogo.style.display = "none";
         }
-        greetText.textContent = `${d.business_name || d.full_name} (${d.account_type})`; tierBadge.textContent = `TIER ${d.kyc_tier}`; acctText.textContent = d.account_number;
+        lvlBadge.textContent = `🏅 Level ${d.kyc_tier}`;
+        acctHeaderText.textContent = `${d.account_number} | ${d.business_name || d.full_name}`;
         renderBal();
         vaultText.textContent = "₦" + d.vault_ngn.toLocaleString("en-NG", { minimumFractionDigits:2 });
-        profileInfo.textContent = `${d.full_name} • ${d.phone} • ${d.email} • ID: ${d.id_type} • Tier ${d.kyc_tier} (Daily Limit: ₦${d.daily_limit_ngn.toLocaleString()})`;
+        moneyInText.textContent = "₦" + (d.money_in_ngn || 0).toLocaleString("en-NG", { minimumFractionDigits:2 });
+        moneyOutText.textContent = "₦" + (d.money_out_ngn || 0).toLocaleString("en-NG", { minimumFractionDigits:2 });
+        todoCount.textContent = d.kyc_tier >= 3 ? "3/3 Completed" : `${d.kyc_tier}/3`;
+        todoTitle.textContent = d.kyc_tier >= 3 ? "Maximum Tier 3 KYC Verified" : "Upgrade KYC Level & Daily Limit";
+        if (d.cac_rc_number) cacStatus.textContent = `✅ Registered Business: ${d.business_name} (${d.cac_rc_number})`;
+        profileInfo.textContent = `${d.full_name} • ${d.phone} • Level ${d.kyc_tier} (Limit: ₦${d.daily_limit_ngn.toLocaleString()})`;
         renderCardsAndTx(d);
     }
     async function checkAcct() {
@@ -41,18 +58,18 @@ WALLET_JS = """
         else recipPreview.textContent = "❌ Account not found";
     }
     async function doTopup() {
-        homeMsg.className = "err"; homeMsg.textContent = "";
+        topupMsg.className = "err"; topupMsg.textContent = "";
         const res = await fetch("/api/deposit", { method:"POST", headers:headers(), body:JSON.stringify({ amount:parseFloat(topupAmt.value), pin:topupPin.value, when:localTime() }) });
         const d = await res.json();
-        if (!res.ok) return homeMsg.textContent = d.detail || "Failed";
-        homeMsg.className = "ok"; homeMsg.textContent = "✅ Wallet funded"; topupAmt.value = topupPin.value = ""; refreshWallet();
+        if (!res.ok) return topupMsg.textContent = d.detail || "Failed";
+        topupMsg.className = "ok"; topupMsg.textContent = "✅ Wallet funded"; topupAmt.value = topupPin.value = ""; refreshWallet();
     }
     async function doBill() {
-        homeMsg.className = "err"; homeMsg.textContent = "";
+        billMsg.className = "err"; billMsg.textContent = "";
         const res = await fetch("/api/bills", { method:"POST", headers:headers(), body:JSON.stringify({ service:billSvc.value, target:billTarget.value, amount:parseFloat(billAmt.value), pin:billPin.value, when:localTime() }) });
         const d = await res.json();
-        if (!res.ok) return homeMsg.textContent = d.detail || "Failed";
-        homeMsg.className = "ok"; homeMsg.textContent = `✅ Paid (${d.reference})`; billTarget.value = billAmt.value = billPin.value = ""; refreshWallet();
+        if (!res.ok) return billMsg.textContent = d.detail || "Failed";
+        billMsg.className = "ok"; billMsg.textContent = `✅ Paid (${d.reference})`; billTarget.value = billAmt.value = billPin.value = ""; refreshWallet();
     }
     async function doTransfer() {
         sendMsg.className = "err"; sendMsg.textContent = "";
@@ -67,5 +84,12 @@ WALLET_JS = """
         const d = await res.json();
         if (!res.ok) return vaultMsg.textContent = d.detail || "Failed";
         vaultMsg.className = "ok"; vaultMsg.textContent = `✅ Done (${d.reference})`; vaultAmt.value = vaultPin.value = ""; refreshWallet();
+    }
+    async function submitCac() {
+        cacMsg.className = "err"; cacMsg.textContent = "";
+        const res = await fetch("/api/cac-register", { method:"POST", headers:headers(), body:JSON.stringify({ business_name:cacBizName.value, category:cacCat.value, pin:cacPin.value }) });
+        const d = await res.json();
+        if (!res.ok) return cacMsg.textContent = d.detail || "Failed";
+        cacMsg.className = "ok"; cacMsg.textContent = `✅ CAC Approved! RC Number: ${d.cac_number}`; cacBizName.value = cacPin.value = ""; refreshWallet();
     }
 """

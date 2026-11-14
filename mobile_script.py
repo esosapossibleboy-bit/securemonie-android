@@ -16,13 +16,15 @@ EXTRAS_JS = """
             );
             return box;
         }));
-        txList.replaceChildren(...d.transactions.map(t => {
+        const makeTxRow = (t) => {
             const row = Object.assign(document.createElement("div"), { className:"tx" });
             const left = document.createElement("div");
-            left.append(Object.assign(document.createElement("div"), { textContent:t.title }), Object.assign(document.createElement("small"), { textContent:`${t.bank} • ${t.ref} • ${t.time}`, style:"color:#94a3b8;" }));
-            const amt = Object.assign(document.createElement("span"), { style:`font-weight:700;color:${t.kind==="CREDIT"?"#34d399":"#fb7185"}`, textContent:`${t.kind==="CREDIT"?"+":"-"}₦${t.amount.toLocaleString("en-NG", { minimumFractionDigits:2 })}` });
+            left.append(Object.assign(document.createElement("div"), { textContent:t.title, style:"font-size:0.88rem;" }), Object.assign(document.createElement("small"), { textContent:`${t.time}`, style:"color:#94a3b8;font-size:0.76rem;" }));
+            const amt = Object.assign(document.createElement("span"), { style:`font-weight:700;font-size:0.9rem;color:${t.kind==="CREDIT"?"#34d399":"#fb7185"}`, textContent:`${t.kind==="CREDIT"?"+":"-"}₦${t.amount.toLocaleString("en-NG", { minimumFractionDigits:2 })}` });
             row.append(left, amt); return row;
-        }));
+        };
+        recentTxBox.replaceChildren(...d.transactions.slice(0, 2).map(makeTxRow));
+        txList.replaceChildren(...d.transactions.map(makeTxRow));
     }
     async function issueCard() {
         const res = await fetch("/api/cards", { method:"POST", headers:headers(), body:JSON.stringify({ currency:cardCur.value }) });

@@ -44,7 +44,8 @@ AUTH_JS = """
     function showQuickUnlock(msg = "") {
         const phone = localStorage.getItem("sm_phone"), name = localStorage.getItem("sm_name"), selfie = localStorage.getItem("sm_selfie");
         if (!phone) return switchToFullLogin(msg);
-        loginBox.style.display = "none"; signupWizard.style.display = "none"; appShell.style.display = "none"; bottomTabs.style.display = "none"; logoutBtn.style.display = "none";
+        loginBox.style.display = "none"; signupWizard.style.display = "none"; forgotBox.style.display = "none";
+        appShell.style.display = "none"; bottomTabs.style.display = "none";
         quickUnlockBox.style.display = "block";
         if (selfie) { unlockSelfieImg.src = selfie; unlockSelfieImg.style.display = "block"; avatarInitials.style.display = "none"; }
         else { unlockSelfieImg.style.display = "none"; avatarInitials.style.display = "flex"; avatarInitials.textContent = getInitials(name); }
@@ -53,12 +54,30 @@ AUTH_JS = """
         keypadBuf = ""; renderKeypadCells(); keypadMsg.textContent = typeof msg === "string" ? msg : "";
     }
     function switchToFullLogin(msg = "") {
-        stopCamera(); quickUnlockBox.style.display = "none"; signupWizard.style.display = "none"; appShell.style.display = "none"; bottomTabs.style.display = "none"; logoutBtn.style.display = "none";
+        stopCamera(); quickUnlockBox.style.display = "none"; signupWizard.style.display = "none"; forgotBox.style.display = "none";
+        appShell.style.display = "none"; bottomTabs.style.display = "none";
         loginBox.style.display = "block"; loginMsg.textContent = typeof msg === "string" ? msg : "";
     }
+    function openForgotBox() {
+        quickUnlockBox.style.display = "none"; loginBox.style.display = "none"; signupWizard.style.display = "none";
+        forgotBox.style.display = "block"; fgMsg.textContent = "";
+        fgIdent.value = localStorage.getItem("sm_phone") || "";
+    }
+    async function submitForgot() {
+        fgMsg.className = "err"; fgMsg.textContent = "";
+        const res = await fetch("/api/forgot-passcode", {
+            method:"POST", headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({ identifier:fgIdent.value.trim(), pin:fgPin.value, new_passcode:fgNewPass.value })
+        });
+        const d = await res.json();
+        if (!res.ok) return fgMsg.textContent = Array.isArray(d.detail) ? d.detail.map(x => x.msg).join(", ") : (d.detail || "Reset failed");
+        fgMsg.className = "ok"; fgMsg.textContent = "✅ Passcode reset! Sign in with your new 6-digit passcode.";
+        fgPin.value = fgNewPass.value = "";
+        setTimeout(() => { forgotBox.style.display = "none"; switchToFullLogin("✅ Passcode updated—enter your new 6-digit passcode."); }, 1200);
+    }
     function openSignupWizard() {
-        loginBox.style.display = "none"; quickUnlockBox.style.display = "none"; signupWizard.style.display = "block";
-        signupMsg.textContent = ""; goStep(1);
+        loginBox.style.display = "none"; quickUnlockBox.style.display = "none"; forgotBox.style.display = "none";
+        signupWizard.style.display = "block"; signupMsg.textContent = ""; goStep(1);
     }
     function backToLogin() { switchToFullLogin(); }
     function toggleBizFields() { bizOnlyFields.style.display = regType.value === "Business" ? "block" : "none"; }

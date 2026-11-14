@@ -6,7 +6,9 @@ from pydantic import BaseModel, Field
 from bank_core import (
     get_account_summary,
     login_customer,
+    register_cac_business,
     register_customer,
+    reset_forgotten_passcode,
     update_security_settings,
 )
 from db_adapter import get_db_connection
@@ -15,7 +17,7 @@ auth_router = APIRouter()
 
 class RegisterReq(BaseModel):
     full_name: str = Field(min_length=2, max_length=60)
-    phone: str = Field(pattern=r"^0[789][01]\d{8}$")
+    phone: str = Field(pattern=r"^0\d{10}$")
     email: str = Field(min_length=4, max_length=120)
     account_type: Literal["Personal", "Business"] = "Personal"
     password: str = Field(pattern=r"^\d{6}$")
@@ -33,6 +35,16 @@ class RegisterReq(BaseModel):
 class LoginReq(BaseModel):
     identifier: str = Field(min_length=3, max_length=120)
     password: str = Field(pattern=r"^\d{6}$")
+
+class ForgotPasscodeReq(BaseModel):
+    identifier: str = Field(min_length=3, max_length=120)
+    pin: str = Field(pattern=r"^\d{4}$")
+    new_passcode: str = Field(pattern=r"^\d{6}$")
+
+class CacReq(BaseModel):
+    business_name: str = Field(min_length=2, max_length=80)
+    category: str = Field(min_length=2, max_length=60)
+    pin: str = Field(pattern=r"^\d{4}$")
 
 class SettingReq(BaseModel):
     setting: Literal["kyc", "limit", "pin", "password"]
@@ -84,6 +96,25 @@ def api_login(req: LoginReq):
     tok = secrets.token_urlsafe(32)
     mobile_server.SESSIONS[tok] = {"id": user["id"], "seen": time.time()}
     return {"token": tok, "phone": summary["phone"], "selfie_data": summary["selfie_data"], **user}
+
+@auth_router.post("/api/forgot-passcode")
+def api_forgot(req: ForgotPasscodeReq):
+    conn = get_db()
+    res = reset_forgotten_passcode(conn, req.identifier, req.pin, req.new_passcode)
+    conn.close()
+    if not res["ok"]:
+        raise HTTPException(status_code=400, detail=res["error"])
+    return {"status": "passcode_reset"}
+
+@auth_router.post("/api/cac-register")
+def api_cac(req: CacReq, authorization: Optional[str] = Header(None)):
+    u = auth_user(authorization)
+    conn = get_db()
+    res = register_cac_business(conn, u["id"], req.business_name, req.category, req.pin)
+    conn.close()
+    if not res["ok"]:
+        raise HTTPException(status_code=400, detail=res["error"])
+    return res
 
 @auth_router.post("/api/settings")
 def api_settings(req: SettingReq, authorization: Optional[str] = Header(None)):

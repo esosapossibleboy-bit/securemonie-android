@@ -28,6 +28,7 @@ def init_bank_db(conn):
             account_type TEXT NOT NULL DEFAULT 'Personal',
             business_name TEXT DEFAULT '',
             business_category TEXT DEFAULT '',
+            cac_rc_number TEXT DEFAULT '',
             address TEXT DEFAULT '',
             id_type TEXT DEFAULT 'NIN Slip',
             pep_status TEXT DEFAULT 'No',
@@ -125,6 +126,33 @@ def login_customer(conn, identifier: str, password: str):
         return None
     cid, name, acct, pw_hash = row
     return {"id": cid, "full_name": name, "account_number": acct} if verify_secret(password, pw_hash) else None
+
+def reset_forgotten_passcode(conn, identifier: str, transaction_pin: str, new_passcode: str):
+    init_bank_db(conn)
+    ident = identifier.lower().strip()
+    cur = conn.cursor()
+    cur.execute("SELECT id, pin_hash FROM customers WHERE email = ? OR phone = ?", (ident, ident))
+    row = cur.fetchone()
+    if not row:
+        return {"ok": False, "error": "Account not found for that phone or email"}
+    cid, pin_hash = row
+    if not verify_secret(transaction_pin, pin_hash):
+        return {"ok": False, "error": "Incorrect 4-digit Transaction PIN"}
+    cur.execute("UPDATE customers SET password_hash = ? WHERE id = ?", (hash_secret(new_passcode), cid))
+    conn.commit()
+    return {"ok": True}
+
+def register_cac_business(conn, customer_id: int, business_name: str, category: str, pin: str):
+    cur = conn.cursor()
+    if not check_pin(cur, customer_id, pin):
+        return {"ok": False, "error": "Incorrect 4-digit Transaction PIN"}
+    bn_code = "BN-" + "".join(str(random.randint(0, 9)) for _ in range(7))
+    cur.execute(
+        "UPDATE customers SET account_type = 'Business', business_name = ?, business_category = ?, cac_rc_number = ? WHERE id = ?",
+        (business_name.strip(), category.strip(), bn_code, customer_id),
+    )
+    conn.commit()
+    return {"ok": True, "cac_number": bn_code}
 
 def check_pin(cur, customer_id: int, pin: str) -> bool:
     cur.execute("SELECT pin_hash FROM customers WHERE id = ?", (customer_id,))

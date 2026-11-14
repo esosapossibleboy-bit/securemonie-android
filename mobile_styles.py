@@ -15,10 +15,20 @@ MOBILE_CSS = """
     .btn-gold { background: #f59e0b; color: #111827; }
     .btn-dark { background: #1e294b; color: #e2e8f0; }
     .tab-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #10172d; border-top: 1px solid #1e294b; display: flex; justify-content: space-around; padding: 8px 0; z-index: 20; }
-    .tab-btn { background: none; border: none; color: #94a3b8; font-size: 0.75rem; font-weight: 600; margin: 0; padding: 4px; width: auto; }
+    .tab-btn { background: none; border: none; color: #94a3b8; font-size: 0.72rem; font-weight: 600; margin: 0; padding: 4px; width: auto; }
     .tab-btn.active { color: #fbbf24; }
     .tx { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #1e294b; gap: 10px; }
     .err { color: #fb7185; font-size: 0.88rem; min-height: 20px; margin-top: 8px; }
     .ok { color: #34d399; font-size: 0.88rem; min-height: 20px; margin-top: 8px; }
+    .avatar-ring { width: 76px; height: 76px; border-radius: 22px; background: #1e294b; display: flex; align-items: center; justify-content: center; margin: 10px auto; border: 2px solid #334155; }
+    .avatar-inner { width: 54px; height: 54px; border-radius: 15px; background: linear-gradient(135deg, #4f46e5, #3730a3); color: #fff; font-weight: 800; font-size: 1.25rem; display: flex; align-items: center; justify-content: center; }
+    .phone-pill { display: inline-block; background: rgba(245, 158, 11, 0.16); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); padding: 5px 14px; border-radius: 10px; font-weight: 700; font-size: 0.88rem; }
+    .pin-strip { background: #131b31; border: 1px solid #222f52; border-radius: 14px; padding: 12px; display: flex; justify-content: space-between; gap: 8px; margin: 18px 0; }
+    .pin-cell { flex: 1; height: 48px; border-radius: 10px; background: #26314d; border: 1.5px solid transparent; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; font-weight: 800; color: #f8fafc; }
+    .pin-cell.active { border-color: #f59e0b; background: #1b243b; }
+    .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; max-width: 290px; margin: 12px auto; }
+    .key-btn { width: 68px; height: 68px; border-radius: 50%; background: #162038; color: #f8fafc; font-size: 1.45rem; font-weight: 700; margin: 0 auto; padding: 0; border: 1px solid #243254; }
+    .key-btn:active { background: #4f46e5; }
+    .key-submit { background: #4f46e5; color: #fff; }
 </style>
 """

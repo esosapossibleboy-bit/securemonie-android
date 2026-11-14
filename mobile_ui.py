@@ -1,4 +1,5 @@
 from android_pwa import LOGO_SVG
+from mobile_auth_html import AUTH_HTML
 from mobile_script import MOBILE_JS
 from mobile_styles import MOBILE_CSS
 
@@ -20,29 +21,11 @@ def render_mobile_app() -> str:
 <body>
     <div class="app-bar">
         <div class="brand">{LOGO_SVG}<span>Securemonie</span></div>
-        <button id="logoutBtn" class="btn-dark" style="display:none;width:auto;margin:0;padding:7px 12px;font-size:0.82rem;" onclick="logout()">Lock App</button>
+        <button id="logoutBtn" class="btn-dark" style="display:none;width:auto;margin:0;padding:7px 12px;font-size:0.82rem;" onclick="lockApp()">Lock App</button>
     </div>
 
     <div class="wrap">
-        <form id="authBox" class="card" autocomplete="off" onsubmit="return false;">
-            <div style="text-align:center;margin-bottom:10px;">{LOGO_SVG}</div>
-            <h2 id="authHeading" style="margin:0 0 6px;text-align:center;">Sign In to Securemonie</h2>
-            <div id="regFields" style="display:none;">
-                <input id="regName" placeholder="Legal Full Name (as on BVN/NIN)" />
-                <input id="regPhone" type="tel" maxlength="11" inputmode="numeric" placeholder="Nigerian Phone Number (080...)" />
-                <select id="regType"><option value="Personal">Personal Banking Account</option><option value="Business">Business / POS Account</option></select>
-            </div>
-            <input id="authIdent" placeholder="Phone Number or Email Address" />
-            <input id="authPass" type="password" placeholder="Password (8+ chars, A-z, 0-9)" />
-            <div id="regPinFields" style="display:none;">
-                <input id="regPin" type="password" inputmode="numeric" maxlength="4" placeholder="Create 4-Digit Transaction PIN" />
-                <input id="regBvn" type="text" inputmode="numeric" maxlength="11" placeholder="Optional 11-Digit BVN/NIN (Instant Tier 2)" />
-            </div>
-            <button id="authSubmitBtn" type="button" onclick="submitAuth()">Sign In</button>
-            <button id="authSwitchBtn" type="button" class="btn-dark" onclick="switchAuth()">Open a Free Securemonie Account</button>
-            <p id="authMsg" class="err"></p>
-        </form>
-
+        {AUTH_HTML}
         <div id="appShell" style="display:none;">
             <div id="tabHome">
                 <div class="hero">
@@ -59,7 +42,6 @@ def render_mobile_app() -> str:
                         <button type="button" onclick="copyAcct()" style="width:auto;margin:0;padding:4px 10px;background:#f59e0b;color:#111827;font-size:0.78rem;">Copy</button>
                     </div>
                 </div>
-
                 <div class="card">
                     <h3 style="margin-top:0;">💳 Fund Wallet & Pay Bills</h3>
                     <input id="topupAmt" type="number" inputmode="decimal" placeholder="Top-Up Amount (₦)" />
@@ -107,11 +89,23 @@ def render_mobile_app() -> str:
                 </div>
             </div>
 
+            <div id="tabCards" style="display:none;">
+                <div class="card">
+                    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                        <h3 style="margin:0;">💳 Virtual Cards</h3>
+                        <button class="btn-gold" style="width:auto;margin:0;padding:8px 12px;font-size:0.82rem;" onclick="issueCard()">+ New Card</button>
+                    </div>
+                    <select id="cardCur"><option value="NGN">Verve Naira Card (₦)</option><option value="USD">Visa Dollar Card ($)</option></select>
+                    <p id="cardMsg" class="err"></p>
+                    <div id="cardsList"></div>
+                </div>
+            </div>
+
             <div id="tabHistory" style="display:none;">
                 <div class="card">
                     <div style="display:flex;justify-content:space-between;align-items:center;">
                         <h3 style="margin:0;">🧾 Bank Statement</h3>
-                        <button class="btn-gold" style="width:auto;margin:0;padding:8px 12px;font-size:0.82rem;" onclick="getPdf()">📄 Download PDF</button>
+                        <button class="btn-gold" style="width:auto;margin:0;padding:8px 12px;font-size:0.82rem;" onclick="getPdf()">📄 PDF</button>
                     </div>
                     <div id="txList" style="margin-top:10px;"></div>
                 </div>
@@ -125,10 +119,10 @@ def render_mobile_app() -> str:
                         <option value="kyc">Upgrade KYC Tier (Enter 11-Digit BVN/NIN)</option>
                         <option value="limit">Set Custom Daily Transfer Limit (₦)</option>
                         <option value="pin">Change 4-Digit Transaction PIN</option>
-                        <option value="password">Change Account Password</option>
+                        <option value="password">Change 6-Digit Login Passcode</option>
                     </select>
                     <input id="settingNewVal" placeholder="Enter 11-Digit BVN or NIN" />
-                    <input id="settingPass" type="password" placeholder="Verify Account Password" />
+                    <input id="settingPass" type="password" maxlength="6" inputmode="numeric" placeholder="Verify Current 6-Digit Passcode" />
                     <button onclick="saveSetting()">Save Security Setting</button>
                     <p id="setMsg" class="err"></p>
                 </div>
@@ -140,6 +134,7 @@ def render_mobile_app() -> str:
         <button id="btnHome" class="tab-btn active" onclick="openTab('Home')">🏠<br/>Home</button>
         <button id="btnSend" class="tab-btn" onclick="openTab('Send')">💸<br/>Transfer</button>
         <button id="btnVault" class="tab-btn" onclick="openTab('Vault')">🌱<br/>Savings</button>
+        <button id="btnCards" class="tab-btn" onclick="openTab('Cards')">💳<br/>Cards</button>
         <button id="btnHistory" class="tab-btn" onclick="openTab('History')">🧾<br/>History</button>
         <button id="btnSettings" class="tab-btn" onclick="openTab('Settings')">⚙️<br/>Settings</button>
     </div>

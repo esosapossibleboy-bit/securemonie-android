@@ -1,11 +1,10 @@
-import re
 import secrets
 import time
 from typing import Literal, Optional
 from fastapi import FastAPI, HTTPException, Header
 from fastapi.responses import HTMLResponse, Response
 from fpdf import FPDF, XPos, YPos
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 from android_pwa import pwa_router
 from bank_core import (
     add_money,
@@ -19,33 +18,29 @@ from bank_core import (
     update_security_settings,
     vault_action,
 )
+from cards_core import get_sm_cards
 from db_adapter import get_db_connection
+from mobile_cards_router import cards_router
 from mobile_ui import render_mobile_app
 
 app = FastAPI(title="Securemonie Microfinance Bank")
 DB_PATH = "securemonie.db"
 SESSIONS = {}
 app.include_router(pwa_router)
+app.include_router(cards_router)
 
 class RegisterReq(BaseModel):
     full_name: str = Field(min_length=2, max_length=60)
     phone: str = Field(pattern=r"^0[789][01]\d{8}$")
     email: str = Field(min_length=4, max_length=120)
     account_type: Literal["Personal", "Business"] = "Personal"
-    password: str = Field(min_length=8, max_length=128)
+    password: str = Field(pattern=r"^\d{6}$")
     pin: str = Field(pattern=r"^\d{4}$")
     bvn_or_nin: str = Field(default="", max_length=11)
 
-    @field_validator("password")
-    @classmethod
-    def strong_pw(cls, v: str) -> str:
-        if not re.search(r"[A-Z]", v) or not re.search(r"[a-z]", v) or not re.search(r"\d", v):
-            raise ValueError("Password needs 8+ chars with uppercase, lowercase, and a number")
-        return v
-
 class LoginReq(BaseModel):
     identifier: str = Field(min_length=3, max_length=120)
-    password: str = Field(min_length=1, max_length=128)
+    password: str = Field(pattern=r"^\d{6}$")
 
 class DepositReq(BaseModel):
     amount: float = Field(gt=0, le=50_000_000)
@@ -75,8 +70,8 @@ class VaultReq(BaseModel):
 
 class SettingReq(BaseModel):
     setting: Literal["kyc", "limit", "pin", "password"]
-    new_value: str = Field(min_length=1, max_length=128)
-    password: str = Field(min_length=1, max_length=128)
+    new_value: str = Field(min_length=1, max_length=64)
+    password: str = Field(pattern=r"^\d{6}$")
 
 def auth_user(authorization: Optional[str]):
     if not authorization or not authorization.startswith("Bearer "):
@@ -102,18 +97,20 @@ def api_reg(req: RegisterReq):
         raise HTTPException(status_code=400, detail="Phone or Email already registered")
     tok = secrets.token_urlsafe(32)
     SESSIONS[tok] = {"id": user["id"], "seen": time.time()}
-    return {"token": tok, **user}
+    return {"token": tok, "phone": req.phone, **user}
 
 @app.post("/api/login")
 def api_login(req: LoginReq):
     conn = get_db_connection(DB_PATH)
     user = login_customer(conn, req.identifier, req.password)
-    conn.close()
     if not user:
-        raise HTTPException(status_code=401, detail="Invalid phone/email or password")
+        conn.close()
+        raise HTTPException(status_code=401, detail="Wrong 6-digit passcode")
+    summary = get_account_summary(conn, user["id"])
+    conn.close()
     tok = secrets.token_urlsafe(32)
     SESSIONS[tok] = {"id": user["id"], "seen": time.time()}
-    return {"token": tok, **user}
+    return {"token": tok, "phone": summary["phone"], **user}
 
 @app.get("/api/wallet")
 def api_wallet(authorization: Optional[str] = Header(None)):
@@ -121,6 +118,7 @@ def api_wallet(authorization: Optional[str] = Header(None)):
     conn = get_db_connection(DB_PATH)
     init_bank_db(conn)
     data = get_account_summary(conn, u["id"])
+    data["cards"] = get_sm_cards(conn, u["id"])
     conn.close()
     return data
 

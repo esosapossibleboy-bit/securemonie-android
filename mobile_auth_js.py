@@ -3,10 +3,14 @@ AUTH_JS = """
     const headers = () => ({ "Content-Type":"application/json", "Authorization":"Bearer " + token });
     const localTime = () => new Date().toLocaleString("en-GB", { day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" });
     function bumpIdle() { clearTimeout(idle); if (token) idle = setTimeout(() => lockApp("🔒 Auto-locked after 10 mins inactivity"), 600000); }
-    ["click", "touchstart", "keydown"].forEach(e => window.addEventListener(e, bumpIdle, { passive:true }));
+    window.addEventListener("click", bumpIdle, { passive:true });
+    window.addEventListener("touchstart", bumpIdle, { passive:true });
+    window.addEventListener("keydown", bumpIdle, { passive:true });
     function getInitials(name) {
-        const p = (name || "SM").trim().split(/\\s+/);
-        return (p[0][0] + (p[1] ? p[1][0] : (p[0][1] || ""))).toUpperCase();
+        const clean = (name || "SM").trim().replace(/\\s+/g, " ");
+        const spaceIdx = clean.indexOf(" ");
+        if (spaceIdx > 0) return (clean.charAt(0) + clean.charAt(spaceIdx + 1)).toUpperCase();
+        return clean.slice(0, 2).toUpperCase();
     }
     function saveDeviceProfile(name, phone, selfie) {
         if (name) localStorage.setItem("sm_name", name);
@@ -60,7 +64,7 @@ AUTH_JS = """
     function toggleBizFields() { bizOnlyFields.style.display = regType.value === "Business" ? "block" : "none"; }
     function sendOtp() {
         signupMsg.textContent = "";
-        if (!/^0[789][01]\\d{8}$/.test(regPhone.value.trim())) return signupMsg.textContent = "Enter a valid 11-digit Nigerian phone number (e.g. 08012345678)";
+        if (!/^0\\d{10}$/.test(regPhone.value.trim())) return signupMsg.textContent = "Enter a valid 11-digit Nigerian phone number (e.g. 08012345678)";
         generatedOtp = String(Math.floor(100000 + Math.random() * 900000));
         otpHint.textContent = `📩 Demo SMS OTP sent to ${regPhone.value.trim()}: ${generatedOtp}`;
     }
@@ -74,8 +78,9 @@ AUTH_JS = """
             if (!capturedSelfie) return signupMsg.textContent = "Please click Open Front Camera and Take a Selfie before continuing";
         }
         stopCamera();
-        const steps =;
-        steps.forEach(n => document.getElementById("wizStep" + n).style.display = n === step ? "block" : "none");
+        for (let n = 1; n <= 4; n++) {
+            document.getElementById("wizStep" + n).style.display = n === step ? "block" : "none";
+        }
         wizBadge.textContent = `STEP ${step} OF 4`;
         toggleBizFields();
     }
@@ -99,8 +104,8 @@ AUTH_JS = """
     function renderKeypadCells() {
         const cells = passcodeCells.children;
         for (let i = 0; i < 6; i++) {
-            cells[i].textContent = i < keypadBuf.length ? "•" : "";
-            cells[i].className = "pin-cell" + (i === keypadBuf.length ? " active" : "");
+            cells.item(i).textContent = i < keypadBuf.length ? "•" : "";
+            cells.item(i).className = "pin-cell" + (i === keypadBuf.length ? " active" : "");
         }
     }
     function pressDigit(d) {

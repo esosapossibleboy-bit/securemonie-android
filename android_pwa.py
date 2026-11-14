@@ -2,7 +2,7 @@ import os
 import struct
 import zlib
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 pwa_router = APIRouter()
 
@@ -75,10 +75,26 @@ def assetlinks():
         },
     }])
 
+@pwa_router.get("/privacy", response_class=HTMLResponse)
+def privacy_policy():
+    return """<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <title>Privacy Policy - Securemonie</title></head>
+    <body style="font-family:system-ui,sans-serif;background:#0b1021;color:#f8fafc;max-width:680px;margin:0 auto;padding:24px;line-height:1.6;">
+    <h1 style="color:#fbbf24;">Securemonie Privacy Policy</h1>
+    <p><strong>Effective Date:</strong> November 2026</p>
+    <p>Securemonie Microfinance Bank ("Securemonie", "we", "our") protects your personal and financial data using PBKDF2-SHA256 encryption, HTTPS/TLS transport security, and strict device verification.</p>
+    <h3>1. Information We Collect</h3>
+    <p>We collect your full name, phone number, email address, KYC identity details (BVN/NIN), and live verification selfie solely to open and secure your account.</p>
+    <h3>2. Camera & Biometric Usage</h3>
+    <p>Camera access is used only during onboarding to capture your verification selfie. Biometric authentication runs locally on your Android device and never leaves your phone.</p>
+    <h3>3. Data Retention & Deletion</h3>
+    <p>You may request account closure or data deletion anytime by contacting <strong>support@securemonie.ng</strong>.</p>
+    </body></html>"""
+
 @pwa_router.get("/sw.js")
 def service_worker():
     code = """
-    const CACHE = "securemonie-v4";
+    const CACHE = "securemonie-v5";
     self.addEventListener("install", e => { self.skipWaiting(); });
     self.addEventListener("activate", e => { e.waitUntil(clients.claim()); });
     self.addEventListener("fetch", e => {

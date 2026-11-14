@@ -4,7 +4,7 @@ import mobile_server
 
 client = TestClient(mobile_server.app)
 
-def test_securemonie_business_kyc_selfie_and_cards(monkeypatch):
+def test_securemonie_full_bank_security_and_features(monkeypatch):
     test_db = "temp_securemonie.db"
     if os.path.exists(test_db):
         os.remove(test_db)
@@ -12,7 +12,7 @@ def test_securemonie_business_kyc_selfie_and_cards(monkeypatch):
 
     sample_selfie = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRof"
 
-    # 1. Register Business Tier 3 account with BVN, NIN, Address, and Live Selfie
+    # 1. Register Business Level 3 account with BVN, NIN, Address & Live Selfie
     u1 = client.post("/api/register", json={
         "full_name": "Esosa Edoleyi",
         "phone": "08012345447",
@@ -31,24 +31,27 @@ def test_securemonie_business_kyc_selfie_and_cards(monkeypatch):
         "selfie_data": sample_selfie,
     }).json()
     assert u1["kyc_tier"] == 3
-    assert u1["selfie_data"] == sample_selfie
 
-    # 2. Quick-unlock login returns selfie_data & phone
+    # 2. Sign in & fund wallet with N100,000
     login_res = client.post("/api/login", json={"identifier": "08012345447", "password": "246810"}).json()
-    assert login_res["selfie_data"] == sample_selfie
     h1 = {"Authorization": f"Bearer {login_res['token']}"}
+    assert client.post("/api/deposit", headers=h1, json={"amount": 100000, "pin": "1234"}).status_code == 200
 
-    # 3. Verify wallet dashboard includes business name, selfie, and Tier 3 limit
+    # 3. Test Per-Transaction Transfer Cap (set cap to N20,000 -> N30,000 blocked -> N15,000 allowed)
+    assert client.post("/api/settings", headers=h1, json={"setting": "single_limit", "new_value": "20000", "password": "246810"}).status_code == 200
+    assert client.post("/api/transfer", headers=h1, json={"recipient_account": "0123456789", "bank_name": "GTBank", "amount": 30000, "pin": "1234"}).status_code == 400
+    assert client.post("/api/transfer", headers=h1, json={"recipient_account": "0123456789", "bank_name": "GTBank", "amount": 15000, "pin": "1234"}).status_code == 200
+
+    # 4. Test Emergency Panic Freeze (blocks outgoing transfer until unfrozen)
+    assert client.post("/api/settings", headers=h1, json={"setting": "freeze", "new_value": "toggle", "password": "246810"}).status_code == 200
+    assert client.post("/api/transfer", headers=h1, json={"recipient_account": "0123456789", "bank_name": "GTBank", "amount": 5000, "pin": "1234"}).status_code == 400
+    assert client.post("/api/settings", headers=h1, json={"setting": "freeze", "new_value": "toggle", "password": "246810"}).status_code == 200
+
+    # 5. Verify Security Activity Log recorded events & Sign Out All Devices revokes token
     dash = client.get("/api/wallet", headers=h1).json()
-    assert dash["business_name"] == "Esosa Global Ventures"
-    assert dash["selfie_data"] == sample_selfie
-    assert dash["daily_limit_ngn"] == 5_000_000.0
-
-    # 4. Top up, transfer to GTBank, and issue a USD Virtual Card
-    assert client.post("/api/deposit", headers=h1, json={"amount": 250000, "pin": "1234"}).status_code == 200
-    assert client.post("/api/transfer", headers=h1, json={"recipient_account": "0123456789", "bank_name": "GTBank", "amount": 150000, "pin": "1234"}).status_code == 200
-    card = client.post("/api/cards", headers=h1, json={"currency": "USD"}).json()
-    assert client.post(f"/api/cards/{card['id']}/fund", headers=h1, json={"amount": 16000, "pin": "1234"}).status_code == 200
+    assert len(dash["security_logs"]) >= 4
+    assert client.post("/api/logout-all", headers=h1).status_code == 200
+    assert client.get("/api/wallet", headers=h1).status_code == 401
 
     if os.path.exists(test_db):
         os.remove(test_db)

@@ -71,7 +71,8 @@ def record_login_attempt(conn, customer_id: int, success: bool):
         return
     cur.execute("SELECT failed_logins FROM customers WHERE id = ?", (customer_id,))
     row = cur.fetchone()
-    fails = (row[0] if row and row[0] else 0) + 1
+    (prev,) = row if row else (0,)
+    fails = (prev or 0) + 1
     lock_ts = int(time.time()) + 900 if fails >= 5 else 0
     cur.execute(
         "UPDATE customers SET failed_logins = ?, locked_until = ? WHERE id = ?",
@@ -93,9 +94,9 @@ def verify_transaction_guard(conn, customer_id: int, amount_kobo: int):
     frozen, failed_pins, single_kobo, daily_kobo = row
     if frozen:
         return "Account is frozen. Unfreeze it in Security Settings to transact."
-    if failed_pins >= 3:
+    if failed_pins and failed_pins >= 3:
         return "Transaction PIN locked after 3 wrong tries. Reset PIN in Security Settings."
-    if single_kobo and amount_kobo > single_kobo:
+    if single_kobo is not None and amount_kobo > single_kobo:
         return f"Exceeds your ₦{single_kobo / 100:,.0f} per-transaction limit"
 
     today_prefix = datetime.now().strftime("%d %b %Y")
@@ -103,7 +104,7 @@ def verify_transaction_guard(conn, customer_id: int, amount_kobo: int):
         "SELECT COALESCE(SUM(amount_kobo), 0) FROM ledger WHERE customer_id = ? AND kind = 'DEBIT' AND created_at LIKE ?",
         (customer_id, f"{today_prefix}%"),
     )
-    spent_today = cur.fetchone()[0] or 0
+    (spent_today,) = cur.fetchone() or (0,)
     if spent_today + amount_kobo > daily_kobo:
         rem = max(0, (daily_kobo - spent_today) / 100)
         return f"Exceeds daily limit. Remaining limit today: ₦{rem:,.2f}"
@@ -118,7 +119,8 @@ def record_pin_attempt(conn, customer_id: int, success: bool):
         return
     cur.execute("SELECT failed_pins FROM customers WHERE id = ?", (customer_id,))
     row = cur.fetchone()
-    fails = (row[0] if row and row[0] else 0) + 1
+    (prev,) = row if row else (0,)
+    fails = (prev or 0) + 1
     cur.execute("UPDATE customers SET failed_pins = ? WHERE id = ?", (fails, customer_id))
     conn.commit()
     log_security_event(conn, customer_id, f"Wrong Transaction PIN ({fails}/3)", "ALERT")

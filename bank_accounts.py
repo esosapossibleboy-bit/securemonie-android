@@ -43,6 +43,14 @@ def init_bank_db(conn):
             vault_kobo INTEGER DEFAULT 0
         )
     """)
+    for col in ("business_name", "business_category", "cac_rc_number", "address", "id_type", "pep_status", "revenue_source", "selfie_data"):
+        try:
+            cur.execute(f"ALTER TABLE customers ADD COLUMN {col} TEXT DEFAULT ''")
+            conn.commit()
+        except Exception:
+            if hasattr(conn, "rollback"):
+                conn.rollback()
+
     cur.execute("""
         CREATE TABLE IF NOT EXISTS ledger (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

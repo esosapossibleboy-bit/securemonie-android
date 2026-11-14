@@ -6,7 +6,7 @@ AUTH_JS = """
     ["click", "touchstart", "keydown"].forEach(e => window.addEventListener(e, bumpIdle, { passive:true }));
     function getInitials(name) {
         const p = (name || "SM").trim().split(/\\s+/);
-        return (p + (p ? p : (p || ""))).toUpperCase();
+        return (p[0][0] + (p[1] ? p[1][0] : (p[0][1] || ""))).toUpperCase();
     }
     function saveDeviceProfile(name, phone, selfie) {
         if (name) localStorage.setItem("sm_name", name);
@@ -60,7 +60,7 @@ AUTH_JS = """
     function toggleBizFields() { bizOnlyFields.style.display = regType.value === "Business" ? "block" : "none"; }
     function sendOtp() {
         signupMsg.textContent = "";
-        if (!/^0\\d{8}$/.test(regPhone.value.trim())) return signupMsg.textContent = "Enter a valid 11-digit Nigerian phone number (e.g. 08012345678)";
+        if (!/^0[789][01]\\d{8}$/.test(regPhone.value.trim())) return signupMsg.textContent = "Enter a valid 11-digit Nigerian phone number (e.g. 08012345678)";
         generatedOtp = String(Math.floor(100000 + Math.random() * 900000));
         otpHint.textContent = `📩 Demo SMS OTP sent to ${regPhone.value.trim()}: ${generatedOtp}`;
     }
@@ -74,7 +74,8 @@ AUTH_JS = """
             if (!capturedSelfie) return signupMsg.textContent = "Please click Open Front Camera and Take a Selfie before continuing";
         }
         stopCamera();
-       .forEach(n => document.getElementById("wizStep" + n).style.display = n === step ? "block" : "none");
+        const steps =;
+        steps.forEach(n => document.getElementById("wizStep" + n).style.display = n === step ? "block" : "none");
         wizBadge.textContent = `STEP ${step} OF 4`;
         toggleBizFields();
     }

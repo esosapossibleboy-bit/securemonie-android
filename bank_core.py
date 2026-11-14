@@ -137,13 +137,13 @@ def vault_action(conn, customer_id: int, action: str, amount_ngn: float, pin: st
 def get_account_summary(conn, customer_id: int):
     cur = conn.cursor()
     cur.execute(
-        "SELECT full_name, phone, email, account_type, account_number, kyc_tier, daily_limit_kobo, wallet_kobo, vault_kobo FROM customers WHERE id = ?",
+        "SELECT full_name, phone, email, account_type, business_name, id_type, selfie_data, account_number, kyc_tier, daily_limit_kobo, wallet_kobo, vault_kobo FROM customers WHERE id = ?",
         (customer_id,),
     )
     row = cur.fetchone()
     if not row:
         return None
-    name, phone, email, acct_type, acct_num, tier, limit_kobo, w_kobo, v_kobo = row
+    name, phone, email, acct_type, biz_name, id_type, selfie, acct_num, tier, limit_kobo, w_kobo, v_kobo = row
     cur.execute("SELECT reference, title, bank_name, kind, amount_kobo, created_at FROM ledger WHERE customer_id = ? ORDER BY id DESC LIMIT 30", (customer_id,))
     txs = [{"ref": r, "title": t, "bank": b, "kind": k, "amount": a / 100, "time": tm} for r, t, b, k, a, tm in cur.fetchall()]
     return {
@@ -151,6 +151,9 @@ def get_account_summary(conn, customer_id: int):
         "phone": phone,
         "email": email,
         "account_type": acct_type,
+        "business_name": biz_name,
+        "id_type": id_type,
+        "selfie_data": selfie,
         "account_number": acct_num,
         "kyc_tier": tier,
         "daily_limit_ngn": limit_kobo / 100,

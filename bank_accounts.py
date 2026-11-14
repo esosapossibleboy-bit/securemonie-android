@@ -26,6 +26,13 @@ def init_bank_db(conn):
             phone TEXT UNIQUE NOT NULL,
             email TEXT UNIQUE NOT NULL,
             account_type TEXT NOT NULL DEFAULT 'Personal',
+            business_name TEXT DEFAULT '',
+            business_category TEXT DEFAULT '',
+            address TEXT DEFAULT '',
+            id_type TEXT DEFAULT 'NIN Slip',
+            pep_status TEXT DEFAULT 'No',
+            revenue_source TEXT DEFAULT 'Salary / Trade',
+            selfie_data TEXT DEFAULT '',
             account_number TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             pin_hash TEXT NOT NULL,
@@ -49,7 +56,24 @@ def init_bank_db(conn):
     """)
     conn.commit()
 
-def register_customer(conn, full_name: str, phone: str, email: str, account_type: str, password: str, pin: str, bvn_or_nin: str = ""):
+def register_customer(
+    conn,
+    full_name: str,
+    phone: str,
+    email: str,
+    account_type: str,
+    password: str,
+    pin: str,
+    bvn: str = "",
+    nin: str = "",
+    id_type: str = "NIN Slip",
+    business_name: str = "",
+    business_category: str = "",
+    address: str = "",
+    pep_status: str = "No",
+    revenue_source: str = "Salary / Trade",
+    selfie_data: str = "",
+):
     init_bank_db(conn)
     cur = conn.cursor()
     while True:
@@ -58,18 +82,28 @@ def register_customer(conn, full_name: str, phone: str, email: str, account_type
         if not cur.fetchone():
             break
 
-    has_id = len(bvn_or_nin.strip()) == 11 and bvn_or_nin.strip().isdigit()
-    tier = 2 if has_id else 1
+    has_bvn = len(bvn.strip()) == 11 and bvn.strip().isdigit()
+    has_nin = len(nin.strip()) == 11 and nin.strip().isdigit()
+    tier = 3 if (has_bvn and has_nin and address.strip()) else (2 if (has_bvn or has_nin) else 1)
     limit_kobo = int(TIER_LIMITS_NGN[tier] * 100)
     acct_kind = "Business" if account_type.strip().lower() == "business" else "Personal"
 
     try:
         cur.execute(
             """
-            INSERT INTO customers (full_name, phone, email, account_type, account_number, password_hash, pin_hash, kyc_tier, daily_limit_kobo)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO customers (
+                full_name, phone, email, account_type, business_name, business_category,
+                address, id_type, pep_status, revenue_source, selfie_data, account_number,
+                password_hash, pin_hash, kyc_tier, daily_limit_kobo
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (full_name.strip(), phone.strip(), email.lower().strip(), acct_kind, acct, hash_secret(password), hash_secret(pin), tier, limit_kobo),
+            (
+                full_name.strip(), phone.strip(), email.lower().strip(), acct_kind,
+                business_name.strip(), business_category.strip(), address.strip(),
+                id_type.strip(), pep_status.strip(), revenue_source.strip(), selfie_data.strip(),
+                acct, hash_secret(password), hash_secret(pin), tier, limit_kobo,
+            ),
         )
         conn.commit()
         return {"id": cur.lastrowid, "full_name": full_name.strip(), "account_number": acct, "kyc_tier": tier}
@@ -108,7 +142,7 @@ def update_security_settings(conn, customer_id: int, setting: str, password: str
         return {"ok": False, "error": "Account not found"}
     pw_hash, tier = row
     if not verify_secret(password, pw_hash):
-        return {"ok": False, "error": "Incorrect account password"}
+        return {"ok": False, "error": "Incorrect 6-digit passcode"}
 
     if setting == "pin":
         cur.execute("UPDATE customers SET pin_hash = ? WHERE id = ?", (hash_secret(new_value), customer_id))

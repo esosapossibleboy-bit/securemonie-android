@@ -43,14 +43,39 @@ def register_cac_business(conn, customer_id: int, business_name: str, category: 
     log_security_event(conn, customer_id, f"CAC Business Registered ({bn_code})", "SUCCESS")
     return {"ok": True, "cac_number": bn_code}
 
+def emergency_lock_by_phone(conn, phone_or_email: str, pin: str, freeze_cards: bool = True):
+    init_security_tables(conn)
+    ident = phone_or_email.lower().strip()
+    cur = conn.cursor()
+    cur.execute("SELECT id, pin_hash FROM customers WHERE phone = ? OR email = ?", (ident, ident))
+    row = cur.fetchone()
+    if not row:
+        return {"ok": False, "error": "No Securemonie account found for that phone or email"}
+    cid, pin_hash = row
+    if not verify_secret(pin, pin_hash):
+        record_pin_attempt(conn, cid, False)
+        return {"ok": False, "error": "Incorrect 4-digit Transaction PIN"}
+    cur.execute("UPDATE customers SET account_frozen = 1 WHERE id = ?", (cid,))
+    if freeze_cards:
+        try:
+            cur.execute("UPDATE sm_cards SET frozen = 1 WHERE customer_id = ?", (cid,))
+        except Exception:
+            pass
+    conn.commit()
+    log_security_event(conn, cid, "EMERGENCY REMOTE LOCK: Account & Cards Frozen", "ALERT")
+    return {"ok": True, "customer_id": cid}
+
 def update_security_settings(conn, customer_id: int, setting: str, password: str, new_value: str):
     init_security_tables(conn)
     cur = conn.cursor()
-    cur.execute("SELECT password_hash, kyc_tier, account_frozen, hide_bal_default FROM customers WHERE id = ?", (customer_id,))
+    cur.execute(
+        "SELECT password_hash, kyc_tier, account_frozen, hide_bal_default, biometrics_enabled FROM customers WHERE id = ?",
+        (customer_id,),
+    )
     row = cur.fetchone()
     if not row:
         return {"ok": False, "error": "Account not found"}
-    pw_hash, tier, frozen, hide_bal = row
+    pw_hash, tier, frozen, hide_bal, bio_on = row
     if not verify_secret(password, pw_hash):
         return {"ok": False, "error": "Incorrect 6-digit passcode"}
 
@@ -96,6 +121,10 @@ def update_security_settings(conn, customer_id: int, setting: str, password: str
         new_priv = 0 if hide_bal else 1
         cur.execute("UPDATE customers SET hide_bal_default = ? WHERE id = ?", (new_priv, customer_id))
         msg = "Balance Privacy Updated"
+    elif setting == "biometrics":
+        new_bio = 0 if bio_on else 1
+        cur.execute("UPDATE customers SET biometrics_enabled = ? WHERE id = ?", (new_bio, customer_id))
+        msg = "Fingerprint / Face ID Login Enabled" if new_bio else "Biometric Login Disabled"
 
     conn.commit()
     if msg:

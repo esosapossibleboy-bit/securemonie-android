@@ -5,10 +5,12 @@ from bank_security import (
     log_security_event,
     record_login_attempt,
     record_pin_attempt,
+    verify_device_or_2fa,
 )
 from bank_settings import (
     TIER_LIMITS_NGN,
     check_pin,
+    emergency_lock_by_phone,
     hash_secret,
     register_cac_business,
     update_security_settings,
@@ -81,6 +83,7 @@ def register_customer(
     pep_status: str = "No",
     revenue_source: str = "Salary / Trade",
     selfie_data: str = "",
+    device_id: str = "",
 ):
     init_bank_db(conn)
     cur = conn.cursor()
@@ -102,27 +105,27 @@ def register_customer(
             INSERT INTO customers (
                 full_name, phone, email, account_type, business_name, business_category,
                 address, id_type, pep_status, revenue_source, selfie_data, account_number,
-                password_hash, pin_hash, kyc_tier, daily_limit_kobo, single_limit_kobo
+                password_hash, pin_hash, kyc_tier, daily_limit_kobo, single_limit_kobo, trusted_device
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 full_name.strip(), phone.strip(), email.lower().strip(), acct_kind,
                 business_name.strip(), business_category.strip(), address.strip(),
                 id_type.strip(), pep_status.strip(), revenue_source.strip(), selfie_data.strip(),
-                acct, hash_secret(password), hash_secret(pin), tier, limit_kobo, limit_kobo,
+                acct, hash_secret(password), hash_secret(pin), tier, limit_kobo, limit_kobo, device_id.strip(),
             ),
         )
         conn.commit()
         cid = cur.lastrowid
-        log_security_event(conn, cid, f"Account Opened (Tier {tier})", "SUCCESS")
+        log_security_event(conn, cid, f"Account Opened (Level {tier})", "SUCCESS")
         return {"id": cid, "full_name": full_name.strip(), "account_number": acct, "kyc_tier": tier}
     except Exception:
         if hasattr(conn, "rollback"):
             conn.rollback()
         return None
 
-def login_customer(conn, identifier: str, password: str):
+def login_customer(conn, identifier: str, password: str, device_id: str = "", otp_code: str = ""):
     init_bank_db(conn)
     ident = identifier.lower().strip()
     cur = conn.cursor()
@@ -137,11 +140,16 @@ def login_customer(conn, identifier: str, password: str):
     lock_err = check_login_lockout(conn, cid)
     if lock_err:
         return {"locked": lock_err}
-    if verify_secret(password, pw_hash):
-        record_login_attempt(conn, cid, True)
-        return {"id": cid, "full_name": name, "account_number": acct}
-    record_login_attempt(conn, cid, False)
-    return None
+    if not verify_secret(password, pw_hash):
+        record_login_attempt(conn, cid, False)
+        return None
+
+    dev_err = verify_device_or_2fa(conn, cid, device_id, otp_verified=(len(otp_code.strip()) == 6 and otp_code.strip().isdigit()))
+    if dev_err == "2FA_REQUIRED":
+        return {"two_factor_required": True}
+
+    record_login_attempt(conn, cid, True)
+    return {"id": cid, "full_name": name, "account_number": acct}
 
 def reset_forgotten_passcode(conn, identifier: str, transaction_pin: str, new_passcode: str):
     init_bank_db(conn)

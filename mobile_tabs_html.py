@@ -95,6 +95,7 @@ TABS_HTML = """
                         <option value="kyc">Upgrade KYC Level (Enter 11-Digit BVN/NIN)</option>
                         <option value="limit">Set 24-Hour Daily Transfer Limit (₦)</option>
                         <option value="single_limit">Set Per-Transaction Transfer Cap (₦)</option>
+                        <option value="biometrics">Enable / Disable Fingerprint & Face ID Login</option>
                         <option value="pin">Change / Unlock 4-Digit Transaction PIN</option>
                         <option value="password">Change 6-Digit Login Passcode</option>
                         <option value="freeze">Emergency Panic Freeze / Unfreeze Account</option>

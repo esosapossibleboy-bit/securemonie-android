@@ -3,6 +3,7 @@ import time
 from typing import Literal, Optional
 from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel, Field
+from bank_accounts import emergency_lock_by_phone
 from bank_core import (
     get_account_summary,
     login_customer,
@@ -32,15 +33,22 @@ class RegisterReq(BaseModel):
     pep_status: str = Field(default="No", max_length=10)
     revenue_source: str = Field(default="Salary / Trade", max_length=60)
     selfie_data: str = Field(min_length=20, max_length=120_000)
+    device_id: str = Field(default="", max_length=80)
 
 class LoginReq(BaseModel):
     identifier: str = Field(min_length=3, max_length=120)
     password: str = Field(pattern=r"^\d{6}$")
+    device_id: str = Field(default="", max_length=80)
+    otp_code: str = Field(default="", max_length=6)
 
 class ForgotPasscodeReq(BaseModel):
     identifier: str = Field(min_length=3, max_length=120)
     pin: str = Field(pattern=r"^\d{4}$")
     new_passcode: str = Field(pattern=r"^\d{6}$")
+
+class EmergencyLockReq(BaseModel):
+    identifier: str = Field(min_length=3, max_length=120)
+    pin: str = Field(pattern=r"^\d{4}$")
 
 class CacReq(BaseModel):
     business_name: str = Field(min_length=2, max_length=80)
@@ -48,7 +56,7 @@ class CacReq(BaseModel):
     pin: str = Field(pattern=r"^\d{4}$")
 
 class SettingReq(BaseModel):
-    setting: Literal["kyc", "limit", "single_limit", "pin", "password", "freeze", "privacy"]
+    setting: Literal["kyc", "limit", "single_limit", "pin", "password", "freeze", "privacy", "biometrics"]
     new_value: str = Field(default="toggle", max_length=64)
     password: str = Field(pattern=r"^\d{6}$")
 
@@ -75,7 +83,7 @@ def api_reg(req: RegisterReq):
     user = register_customer(
         conn, req.full_name, req.phone, req.email, req.account_type, req.password, req.pin,
         req.bvn, req.nin, req.id_type, req.business_name, req.business_category,
-        req.address, req.pep_status, req.revenue_source, req.selfie_data,
+        req.address, req.pep_status, req.revenue_source, req.selfie_data, req.device_id,
     )
     conn.close()
     if not user:
@@ -88,18 +96,34 @@ def api_reg(req: RegisterReq):
 def api_login(req: LoginReq):
     import mobile_server
     conn = get_db()
-    user = login_customer(conn, req.identifier, req.password)
+    user = login_customer(conn, req.identifier, req.password, req.device_id, req.otp_code)
     if not user:
         conn.close()
         raise HTTPException(status_code=401, detail="Wrong 6-digit passcode")
     if "locked" in user:
         conn.close()
         raise HTTPException(status_code=423, detail=user["locked"])
+    if user.get("two_factor_required"):
+        conn.close()
+        raise HTTPException(status_code=403, detail="2FA_REQUIRED")
     summary = get_account_summary(conn, user["id"])
     conn.close()
     tok = secrets.token_urlsafe(32)
     mobile_server.SESSIONS[tok] = {"id": user["id"], "seen": time.time()}
     return {"token": tok, "phone": summary["phone"], "selfie_data": summary["selfie_data"], **user}
+
+@auth_router.post("/api/emergency-lock")
+def api_emergency_lock(req: EmergencyLockReq):
+    import mobile_server
+    conn = get_db()
+    res = emergency_lock_by_phone(conn, req.identifier, req.pin)
+    conn.close()
+    if not res["ok"]:
+        raise HTTPException(status_code=400, detail=res["error"])
+    uid = res["customer_id"]
+    for t in [k for k, v in mobile_server.SESSIONS.items() if v["id"] == uid]:
+        mobile_server.SESSIONS.pop(t, None)
+    return {"status": "account_and_cards_frozen"}
 
 @auth_router.post("/api/forgot-passcode")
 def api_forgot(req: ForgotPasscodeReq):

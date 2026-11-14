@@ -32,6 +32,7 @@ AUTH_HTML = f"""
                 <button type="button" class="key-btn" onclick="pressDigit('0')">0</button>
                 <button type="button" class="key-btn key-submit" onclick="submitKeypad()">→</button>
             </div>
+            <button type="button" id="bioUnlockBtn" class="btn-dark" style="display:none;max-width:260px;margin:8px auto;" onclick="unlockWithBiometrics()">👆 Unlock with Fingerprint / Face ID</button>
             <p id="keypadMsg" class="err"></p>
             <div style="margin-top:6px;"><a href="#" onclick="openForgotBox();return false;" style="color:#fbbf24;text-decoration:none;font-weight:700;font-size:0.92rem;">Forgot passcode?</a></div>
         </div>
@@ -41,10 +42,28 @@ AUTH_HTML = f"""
             <h2 style="margin:0 0 6px;text-align:center;">Sign In to Securemonie</h2>
             <input id="loginIdent" placeholder="Phone Number or Email Address" />
             <input id="loginPass" type="password" maxlength="6" inputmode="numeric" placeholder="6-Digit Login Passcode" />
+            <div id="twoFaRow" style="display:none;margin-top:10px;background:#0b1021;border:1px solid #f59e0b;border-radius:12px;padding:10px;">
+                <div style="font-size:0.82rem;color:#fbbf24;font-weight:700;">🛡️ New Device Detected — 2FA Required</div>
+                <div id="twoFaHint" class="ok" style="font-size:0.82rem;"></div>
+                <input id="loginOtp" type="text" maxlength="6" inputmode="numeric" placeholder="Enter 6-Digit 2FA Code" />
+            </div>
             <button type="button" onclick="submitLogin()">Sign In</button>
             <button type="button" class="btn-dark" onclick="openSignupWizard()">Open a Free Securemonie Account</button>
-            <div style="text-align:center;margin-top:10px;"><a href="#" onclick="openForgotBox();return false;" style="color:#fbbf24;font-size:0.88rem;text-decoration:none;font-weight:600;">Forgot 6-Digit Passcode?</a></div>
+            <div style="display:flex;justify-content:space-between;margin-top:12px;font-size:0.84rem;">
+                <a href="#" onclick="openForgotBox();return false;" style="color:#fbbf24;text-decoration:none;font-weight:600;">Forgot Passcode?</a>
+                <a href="#" onclick="openEmergencyBox();return false;" style="color:#fb7185;text-decoration:none;font-weight:700;">🚨 Stolen Phone Lock</a>
+            </div>
             <p id="loginMsg" class="err"></p>
+        </form>
+
+        <form id="emergencyBox" class="card" style="display:none;" autocomplete="off" onsubmit="return false;">
+            <h3 style="margin-top:0;color:#fb7185;">🚨 Emergency Remote Account & Card Lock</h3>
+            <p style="font-size:0.84rem;color:#cbd5e1;line-height:1.45;">Phone stolen or compromised? Freeze your Securemonie account, block all debit transactions, and lock all virtual cards immediately from any device.</p>
+            <input id="emIdent" placeholder="Your Registered Phone Number or Email" />
+            <input id="emPin" type="password" maxlength="4" inputmode="numeric" placeholder="Verify Your 4-Digit Transaction PIN" />
+            <button type="button" style="background:#e11d48;color:#fff;" onclick="submitEmergencyLock()">Freeze Account & Block All Cards Now</button>
+            <button type="button" class="btn-dark" onclick="switchToFullLogin()">Back to Sign In</button>
+            <p id="emMsg" class="err"></p>
         </form>
 
         <form id="forgotBox" class="card" style="display:none;" autocomplete="off" onsubmit="return false;">

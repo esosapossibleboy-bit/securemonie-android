@@ -64,22 +64,29 @@ EXTRAS_JS = """
             kyc:"Enter 11-Digit BVN or NIN",
             limit:"Enter New 24-Hour Limit in Naira (e.g. 50000)",
             single_limit:"Enter Max Per-Transfer Cap in Naira (e.g. 20000)",
+            biometrics:"Verify your 6-digit passcode below to enable/disable Fingerprint & Face ID",
             pin:"Enter New 4-Digit PIN (Also Unlocks Locked PIN)",
             password:"Enter New 6-Digit Login Passcode",
-            freeze:"Type FREEZE (No value needed—just verify 6-digit passcode below)",
-            privacy:"Type TOGGLE (No value needed—just verify 6-digit passcode below)"
+            freeze:"Verify your 6-digit passcode below to Freeze/Unfreeze account",
+            privacy:"Verify your 6-digit passcode below to toggle balance privacy"
         };
-        const noVal = settingType.value === "freeze" || settingType.value === "privacy";
+        const noVal = settingType.value === "freeze" || settingType.value === "privacy" || settingType.value === "biometrics";
         settingNewVal.style.display = noVal ? "none" : "block";
         settingNewVal.value = noVal ? "toggle" : "";
         settingNewVal.placeholder = map[settingType.value] || "";
     }
     async function saveSetting() {
         setMsg.className = "err"; setMsg.textContent = "";
-        const val = (settingType.value === "freeze" || settingType.value === "privacy") ? "toggle" : settingNewVal.value;
-        const res = await fetch("/api/settings", { method:"POST", headers:headers(), body:JSON.stringify({ setting:settingType.value, new_value:val, password:settingPass.value }) });
+        const isToggle = settingType.value === "freeze" || settingType.value === "privacy" || settingType.value === "biometrics";
+        const val = isToggle ? "toggle" : settingNewVal.value;
+        const pass = settingPass.value;
+        const res = await fetch("/api/settings", { method:"POST", headers:headers(), body:JSON.stringify({ setting:settingType.value, new_value:val, password:pass }) });
         const d = await res.json();
         if (!res.ok) return setMsg.textContent = d.detail || "Update failed";
+        if (settingType.value === "biometrics") {
+            if (localStorage.getItem("sm_bio_pass")) localStorage.removeItem("sm_bio_pass");
+            else localStorage.setItem("sm_bio_pass", pass);
+        }
         setMsg.className = "ok"; setMsg.textContent = "✅ Security setting updated!"; settingNewVal.value = settingPass.value = ""; updateSettingHint(); refreshWallet();
     }
     async function logoutAllDevices() {

@@ -1,58 +1,13 @@
-AUTH_JS = """
-    let token = sessionStorage.getItem("sm_token") || "", keypadBuf = "", generatedOtp = "", capturedSelfie = "", camStream = null, idle = null;
-    const headers = () => ({ "Content-Type":"application/json", "Authorization":"Bearer " + token });
-    const localTime = () => new Date().toLocaleString("en-GB", { day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" });
-    function bumpIdle() {
-        clearTimeout(idle);
-        if (token) idle = setTimeout(() => lockApp("🔒 Auto-locked after 3 mins inactivity"), 180000);
-    }
-    window.addEventListener("click", bumpIdle, { passive:true });
-    window.addEventListener("touchstart", bumpIdle, { passive:true });
-    window.addEventListener("keydown", bumpIdle, { passive:true });
-    document.addEventListener("visibilitychange", () => {
-        if (document.hidden && token) lockApp("🔒 Locked for your security");
-    });
-    function getInitials(name) {
-        const clean = (name || "SM").trim().replace(/\\s+/g, " ");
-        const spaceIdx = clean.indexOf(" ");
-        if (spaceIdx > 0) return (clean.charAt(0) + clean.charAt(spaceIdx + 1)).toUpperCase();
-        return clean.slice(0, 2).toUpperCase();
-    }
-    function saveDeviceProfile(name, phone, selfie) {
-        if (name) localStorage.setItem("sm_name", name);
-        if (phone) localStorage.setItem("sm_phone", phone);
-        if (selfie) localStorage.setItem("sm_selfie", selfie);
-    }
-    function stopCamera() { if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; } }
-    async function startCamera() {
-        signupMsg.textContent = "";
-        try {
-            stopCamera();
-            camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
-            selfiePreview.style.display = "none";
-            selfieVideo.srcObject = camStream;
-            selfieVideo.style.display = "block";
-            snapBtn.style.display = "inline-block";
-            camBtn.textContent = "Restart Camera";
-        } catch (e) { signupMsg.textContent = "Please allow front camera access in your browser settings to take a selfie."; }
-    }
-    function takeSelfie() {
-        const ctx = selfieCanvas.getContext("2d");
-        ctx.drawImage(selfieVideo, 0, 0, 160, 160);
-        capturedSelfie = selfieCanvas.toDataURL("image/jpeg", 0.75);
-        selfiePreview.src = capturedSelfie;
-        selfiePreview.style.display = "block";
-        selfieVideo.style.display = "none";
-        snapBtn.style.display = "none";
-        camBtn.textContent = "Retake Selfie";
-        stopCamera();
-    }
+from mobile_device_js import DEVICE_JS
+
+AUTH_CORE_JS = """
     function showQuickUnlock(msg = "") {
         const phone = localStorage.getItem("sm_phone"), name = localStorage.getItem("sm_name"), selfie = localStorage.getItem("sm_selfie");
         if (!phone) return switchToFullLogin(msg);
-        loginBox.style.display = "none"; signupWizard.style.display = "none"; forgotBox.style.display = "none";
+        loginBox.style.display = "none"; signupWizard.style.display = "none"; forgotBox.style.display = "none"; emergencyBox.style.display = "none";
         appShell.style.display = "none"; bottomTabs.style.display = "none";
         quickUnlockBox.style.display = "block";
+        bioUnlockBtn.style.display = localStorage.getItem("sm_bio_pass") ? "block" : "none";
         if (selfie) { unlockSelfieImg.src = selfie; unlockSelfieImg.style.display = "block"; avatarInitials.style.display = "none"; }
         else { unlockSelfieImg.style.display = "none"; avatarInitials.style.display = "flex"; avatarInitials.textContent = getInitials(name); }
         const masked = "📞 ***" + phone.slice(-4);
@@ -60,12 +15,27 @@ AUTH_JS = """
         keypadBuf = ""; renderKeypadCells(); keypadMsg.textContent = typeof msg === "string" ? msg : "";
     }
     function switchToFullLogin(msg = "") {
-        stopCamera(); quickUnlockBox.style.display = "none"; signupWizard.style.display = "none"; forgotBox.style.display = "none";
+        stopCamera(); quickUnlockBox.style.display = "none"; signupWizard.style.display = "none"; forgotBox.style.display = "none"; emergencyBox.style.display = "none";
         appShell.style.display = "none"; bottomTabs.style.display = "none";
         loginBox.style.display = "block"; loginMsg.textContent = typeof msg === "string" ? msg : "";
     }
+    function openEmergencyBox() {
+        quickUnlockBox.style.display = "none"; loginBox.style.display = "none"; signupWizard.style.display = "none"; forgotBox.style.display = "none";
+        emergencyBox.style.display = "block"; emMsg.textContent = "";
+    }
+    async function submitEmergencyLock() {
+        emMsg.className = "err"; emMsg.textContent = "";
+        const res = await fetch("/api/emergency-lock", {
+            method:"POST", headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({ identifier:emIdent.value.trim(), pin:emPin.value })
+        });
+        const d = await res.json();
+        if (!res.ok) return emMsg.textContent = Array.isArray(d.detail) ? d.detail.map(x => x.msg).join(", ") : (d.detail || "Lock failed");
+        emMsg.className = "ok"; emMsg.textContent = "🚨 SUCCESS: Account & all Virtual Cards are now FROZEN!";
+        emIdent.value = emPin.value = "";
+    }
     function openForgotBox() {
-        quickUnlockBox.style.display = "none"; loginBox.style.display = "none"; signupWizard.style.display = "none";
+        quickUnlockBox.style.display = "none"; loginBox.style.display = "none"; signupWizard.style.display = "none"; emergencyBox.style.display = "none";
         forgotBox.style.display = "block"; fgMsg.textContent = "";
         fgIdent.value = localStorage.getItem("sm_phone") || "";
     }
@@ -82,7 +52,7 @@ AUTH_JS = """
         setTimeout(() => { forgotBox.style.display = "none"; switchToFullLogin("✅ Passcode updated—enter your new 6-digit passcode."); }, 1200);
     }
     function openSignupWizard() {
-        loginBox.style.display = "none"; quickUnlockBox.style.display = "none"; forgotBox.style.display = "none";
+        loginBox.style.display = "none"; quickUnlockBox.style.display = "none"; forgotBox.style.display = "none"; emergencyBox.style.display = "none";
         signupWizard.style.display = "block"; signupMsg.textContent = ""; goStep(1);
     }
     function backToLogin() { switchToFullLogin(); }
@@ -118,7 +88,7 @@ AUTH_JS = """
             bvn: regBvn.value.trim(), nin: regNin.value.trim(), id_type: regIdType.value,
             business_name: regBizName.value.trim(), business_category: regBizCat.value,
             address: regAddress.value.trim(), pep_status: regPep.value, revenue_source: regRevenue.value,
-            selfie_data: capturedSelfie
+            selfie_data: capturedSelfie, device_id: getDeviceId()
         };
         const res = await fetch("/api/register", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload) });
         const d = await res.json();
@@ -142,7 +112,7 @@ AUTH_JS = """
     async function submitKeypad() {
         if (keypadBuf.length !== 6) return keypadMsg.textContent = "Enter all 6 digits";
         keypadMsg.textContent = "";
-        const res = await fetch("/api/login", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ identifier:localStorage.getItem("sm_phone"), password:keypadBuf }) });
+        const res = await fetch("/api/login", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ identifier:localStorage.getItem("sm_phone"), password:keypadBuf, device_id:getDeviceId() }) });
         const d = await res.json();
         keypadBuf = ""; renderKeypadCells();
         if (!res.ok) return keypadMsg.textContent = d.detail || "Incorrect 6-digit passcode";
@@ -151,11 +121,27 @@ AUTH_JS = """
     }
     async function submitLogin() {
         loginMsg.textContent = "";
-        const res = await fetch("/api/login", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ identifier:loginIdent.value, password:loginPass.value }) });
+        if (twoFaRow.style.display === "block" && loginOtp.value.trim() !== login2faCode) {
+            return loginMsg.textContent = "Enter the 6-digit 2FA verification code shown above";
+        }
+        const res = await fetch("/api/login", {
+            method:"POST", headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({ identifier:loginIdent.value, password:loginPass.value, device_id:getDeviceId(), otp_code:loginOtp.value.trim() })
+        });
         const d = await res.json();
-        if (!res.ok) return loginMsg.textContent = Array.isArray(d.detail) ? d.detail.map(x => x.msg).join(", ") : (d.detail || "Sign in failed");
+        if (!res.ok) {
+            if (d.detail === "2FA_REQUIRED") {
+                login2faCode = String(Math.floor(100000 + Math.random() * 900000));
+                twoFaRow.style.display = "block";
+                twoFaHint.textContent = `📩 Demo 2FA Security Code: ${login2faCode}`;
+                return;
+            }
+            return loginMsg.textContent = Array.isArray(d.detail) ? d.detail.map(x => x.msg).join(", ") : (d.detail || "Sign in failed");
+        }
         token = d.token; sessionStorage.setItem("sm_token", token); saveDeviceProfile(d.full_name, d.phone, d.selfie_data);
-        loginIdent.value = loginPass.value = "";
+        loginIdent.value = loginPass.value = loginOtp.value = ""; twoFaRow.style.display = "none";
         enterApp();
     }
 """
+
+AUTH_JS = f"{DEVICE_JS}\n{AUTH_CORE_JS}"

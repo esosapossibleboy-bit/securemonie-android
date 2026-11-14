@@ -19,6 +19,8 @@ def init_security_tables(conn):
         "ALTER TABLE customers ADD COLUMN account_frozen INTEGER DEFAULT 0",
         "ALTER TABLE customers ADD COLUMN single_limit_kobo INTEGER DEFAULT 5000000",
         "ALTER TABLE customers ADD COLUMN hide_bal_default INTEGER DEFAULT 1",
+        "ALTER TABLE customers ADD COLUMN trusted_device TEXT DEFAULT ''",
+        "ALTER TABLE customers ADD COLUMN biometrics_enabled INTEGER DEFAULT 0",
     ):
         try:
             cur.execute(col_sql)
@@ -81,6 +83,31 @@ def record_login_attempt(conn, customer_id: int, success: bool):
     conn.commit()
     log_security_event(conn, customer_id, f"Failed Passcode Attempt ({fails}/5)", "ALERT")
 
+def verify_device_or_2fa(conn, customer_id: int, device_id: str, otp_verified: bool = False):
+    init_security_tables(conn)
+    cur = conn.cursor()
+    cur.execute("SELECT trusted_device FROM customers WHERE id = ?", (customer_id,))
+    row = cur.fetchone()
+    if not row:
+        return "Account not found"
+    (saved_dev,) = row
+    dev = (device_id or "").strip()
+    if not saved_dev:
+        if dev:
+            cur.execute("UPDATE customers SET trusted_device = ? WHERE id = ?", (dev, customer_id))
+            conn.commit()
+        return None
+    if dev and dev == saved_dev:
+        return None
+    if otp_verified:
+        if dev:
+            cur.execute("UPDATE customers SET trusted_device = ? WHERE id = ?", (dev, customer_id))
+            conn.commit()
+        log_security_event(conn, customer_id, "New Device Authorized via 2FA", "SUCCESS")
+        return None
+    log_security_event(conn, customer_id, "Blocked Unrecognized Device Login (2FA Required)", "ALERT")
+    return "2FA_REQUIRED"
+
 def verify_transaction_guard(conn, customer_id: int, amount_kobo: int):
     init_security_tables(conn)
     cur = conn.cursor()
@@ -98,6 +125,16 @@ def verify_transaction_guard(conn, customer_id: int, amount_kobo: int):
         return "Transaction PIN locked after 3 wrong tries. Reset PIN in Security Settings."
     if single_kobo is not None and amount_kobo > single_kobo:
         return f"Exceeds your ₦{single_kobo / 100:,.0f} per-transaction limit"
+
+    now_minute = datetime.now().strftime("%d %b %Y, %H:%M")
+    cur.execute(
+        "SELECT COUNT(*) FROM ledger WHERE customer_id = ? AND kind = 'DEBIT' AND created_at = ?",
+        (customer_id, now_minute),
+    )
+    (same_min_txs,) = cur.fetchone() or (0,)
+    if same_min_txs >= 3:
+        log_security_event(conn, customer_id, "Velocity Fraud Guard Triggered (3+ tx/min)", "ALERT")
+        return "Security pause: Too many rapid outgoing transfers in 1 minute. Wait 60 seconds."
 
     today_prefix = datetime.now().strftime("%d %b %Y")
     cur.execute(

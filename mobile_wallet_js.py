@@ -1,5 +1,5 @@
 WALLET_JS = """
-    let hideBal = true, rawBal = 0, curAcct = "", curRefCode = "", isSendingTx = false;
+    let hideBal = true, rawBal = 0, rawVault = 0, curAcct = "", curRefCode = "", isSendingTx = false;
     function enterApp() {
         quickUnlockBox.style.display = "none"; loginBox.style.display = "none"; signupWizard.style.display = "none"; forgotBox.style.display = "none";
         appShell.style.display = "block"; bottomTabs.style.display = "flex"; topActions.style.display = "flex"; lvlBadge.style.display = "inline-flex";
@@ -29,11 +29,22 @@ WALLET_JS = """
     function renderBal() { balText.textContent = hideBal ? "₦ ••••••" : ("₦" + rawBal.toLocaleString("en-NG", { minimumFractionDigits:2 })); }
     function copyAcct() { navigator.clipboard?.writeText(curAcct); alert("✅ Account number copied: " + curAcct); }
     function copyRefCode() { navigator.clipboard?.writeText(curRefCode); alert("✅ Referral code copied: " + curRefCode); }
+    function setVaultGoal() {
+        const val = prompt("Enter your Savings Vault Target in Naira (e.g. 100000):", localStorage.getItem("sm_vault_goal") || "100000");
+        const num = parseFloat(val || "0");
+        if (num > 0) { localStorage.setItem("sm_vault_goal", String(num)); renderVaultGoal(); }
+    }
+    function renderVaultGoal() {
+        const goal = parseFloat(localStorage.getItem("sm_vault_goal") || "100000");
+        const pct = Math.min(100, Math.round((rawVault / goal) * 100));
+        vaultGoalLabel.textContent = `Goal: ₦${goal.toLocaleString()} (${pct}%)`;
+        vaultGoalBar.style.width = pct + "%";
+    }
     async function refreshWallet() {
         const res = await fetch("/api/wallet", { headers:headers() });
         if (res.status === 401) return lockApp("Session expired");
         const d = await res.json();
-        rawBal = d.wallet_ngn; curAcct = d.account_number; curRefCode = d.referral_code || "SM-000000";
+        rawBal = d.wallet_ngn; rawVault = d.vault_ngn; curAcct = d.account_number; curRefCode = d.referral_code || "SM-000000";
         if (typeof d.hide_bal_default === "boolean") hideBal = d.hide_bal_default;
         saveDeviceProfile(d.full_name, d.phone, d.selfie_data);
         if (d.selfie_data) {
@@ -49,7 +60,8 @@ WALLET_JS = """
         homeCashbackText.textContent = tabCashbackText.textContent = cbTxt;
         homeReferralText.textContent = tabReferralText.textContent = rfTxt;
         myRefCodeText.textContent = curRefCode;
-        vaultText.textContent = "₦" + d.vault_ngn.toLocaleString("en-NG", { minimumFractionDigits:2 });
+        vaultText.textContent = "₦" + rawVault.toLocaleString("en-NG", { minimumFractionDigits:2 });
+        renderVaultGoal();
         moneyInText.textContent = "₦" + (d.money_in_ngn || 0).toLocaleString("en-NG", { minimumFractionDigits:2 });
         moneyOutText.textContent = "₦" + (d.money_out_ngn || 0).toLocaleString("en-NG", { minimumFractionDigits:2 });
         todoCount.textContent = d.kyc_tier >= 3 ? "3/3 Completed" : `${d.kyc_tier}/3`;

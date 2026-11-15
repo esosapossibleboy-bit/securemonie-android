@@ -46,6 +46,7 @@ class TransferReq(BaseModel):
     pin: str = Field(pattern=r"^\d{4}$")
     note: str = Field(default="Transfer", max_length=50)
     when: Optional[str] = None
+    idem_key: str = Field(default="", max_length=64)
 
 class VaultReq(BaseModel):
     action: Literal["save", "withdraw", "interest"]
@@ -104,7 +105,7 @@ def api_bills(req: BillReq, authorization: Optional[str] = Header(None)):
 def api_transfer(req: TransferReq, authorization: Optional[str] = Header(None)):
     u = auth_user(authorization)
     conn = get_db_connection(DB_PATH)
-    res = send_transfer(conn, u["id"], req.recipient_account, req.bank_name, req.amount, req.pin, req.note, req.when)
+    res = send_transfer(conn, u["id"], req.recipient_account, req.bank_name, req.amount, req.pin, req.note, req.when, req.idem_key)
     conn.close()
     if not res["ok"]:
         raise HTTPException(status_code=400, detail=res["error"])

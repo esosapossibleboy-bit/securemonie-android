@@ -1,5 +1,5 @@
 WALLET_JS = """
-    let hideBal = true, rawBal = 0, curAcct = "", curRefCode = "";
+    let hideBal = true, rawBal = 0, curAcct = "", curRefCode = "", isSendingTx = false;
     function enterApp() {
         quickUnlockBox.style.display = "none"; loginBox.style.display = "none"; signupWizard.style.display = "none"; forgotBox.style.display = "none";
         appShell.style.display = "block"; bottomTabs.style.display = "flex"; topActions.style.display = "flex"; lvlBadge.style.display = "inline-flex";
@@ -96,11 +96,15 @@ WALLET_JS = """
         billMsg.className = "ok"; billMsg.textContent = `✅ Paid + ₦${(d.cashback_ngn || 0).toFixed(2)} Cashback (${d.reference})`; billTarget.value = billAmt.value = billPin.value = ""; refreshWallet();
     }
     async function doTransfer() {
-        sendMsg.className = "err"; sendMsg.textContent = "";
-        const res = await fetch("/api/transfer", { method:"POST", headers:headers(), body:JSON.stringify({ recipient_account:toAcct.value.trim(), bank_name:bankSelect.value, amount:parseFloat(sendAmt.value), pin:sendPin.value, note:sendNote.value, when:localTime() }) });
-        const d = await res.json();
-        if (!res.ok) return sendMsg.textContent = d.detail || "Failed";
-        sendMsg.className = "ok"; sendMsg.textContent = `✅ Sent to ${d.recipient} (${d.reference})`; toAcct.value = sendAmt.value = sendNote.value = sendPin.value = recipPreview.textContent = ""; refreshWallet();
+        if (isSendingTx) return;
+        isSendingTx = true; sendMsg.className = "err"; sendMsg.textContent = "⏳ Sending...";
+        const idemKey = "IDEM-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
+        try {
+            const res = await fetch("/api/transfer", { method:"POST", headers:headers(), body:JSON.stringify({ recipient_account:toAcct.value.trim(), bank_name:bankSelect.value, amount:parseFloat(sendAmt.value), pin:sendPin.value, note:sendNote.value, when:localTime(), idem_key:idemKey }) });
+            const d = await res.json();
+            if (!res.ok) { sendMsg.textContent = d.detail || "Failed"; return; }
+            sendMsg.className = "ok"; sendMsg.textContent = `✅ Sent to ${d.recipient} (${d.reference})`; toAcct.value = sendAmt.value = sendNote.value = sendPin.value = recipPreview.textContent = ""; refreshWallet();
+        } finally { isSendingTx = false; }
     }
     async function doVault(action) {
         vaultMsg.className = "err"; vaultMsg.textContent = "";

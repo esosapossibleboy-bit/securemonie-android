@@ -13,7 +13,7 @@ from bank_accounts import (
     verify_secret,
 )
 from bank_rewards import award_bill_cashback
-from bank_security import verify_transaction_guard
+from bank_security import check_idempotency, save_idempotency, verify_transaction_guard
 from bank_summary import get_account_summary
 
 def lookup_recipient(conn, account_number: str, bank_name: str = "Securemonie MFB"):
@@ -44,7 +44,11 @@ def add_money(conn, customer_id: int, amount_ngn: float, pin: str, when: str = N
     conn.commit()
     return {"ok": True, "reference": ref}
 
-def send_transfer(conn, sender_id: int, recipient_acct: str, bank_name: str, amount_ngn: float, pin: str, note: str = "Transfer", when: str = None):
+def send_transfer(conn, sender_id: int, recipient_acct: str, bank_name: str, amount_ngn: float, pin: str, note: str = "Transfer", when: str = None, idem_key: str = ""):
+    existing_ref = check_idempotency(conn, sender_id, idem_key)
+    if existing_ref:
+        return {"ok": True, "reference": existing_ref, "recipient": f"{bank_name} ({recipient_acct})", "duplicate_prevented": True}
+
     kobo = round(amount_ngn * 100)
     if kobo <= 0:
         return {"ok": False, "error": "Amount must be positive"}
@@ -81,11 +85,13 @@ def send_transfer(conn, sender_id: int, recipient_acct: str, bank_name: str, amo
         cur.execute("INSERT INTO ledger (reference, customer_id, title, bank_name, kind, amount_kobo, created_at) VALUES (?, ?, ?, ?, 'DEBIT', ?, ?)", (ref, sender_id, f"To {r_name} ({desc})", bank_name, kobo, ts))
         cur.execute("INSERT INTO ledger (reference, customer_id, title, bank_name, kind, amount_kobo, created_at) VALUES (?, ?, ?, ?, 'CREDIT', ?, ?)", (ref, r_id, f"From {s_name} ({desc})", bank_name, kobo, ts))
         conn.commit()
+        save_idempotency(conn, sender_id, idem_key, ref)
         return {"ok": True, "reference": ref, "recipient": r_name}
 
     cur.execute("UPDATE customers SET wallet_kobo = wallet_kobo - ? WHERE id = ?", (kobo, sender_id))
     cur.execute("INSERT INTO ledger (reference, customer_id, title, bank_name, kind, amount_kobo, created_at) VALUES (?, ?, ?, ?, 'DEBIT', ?, ?)", (ref, sender_id, f"NIP Transfer to {recipient_acct} ({desc})", bank_name, kobo, ts))
     conn.commit()
+    save_idempotency(conn, sender_id, idem_key, ref)
     return {"ok": True, "reference": ref, "recipient": f"{bank_name} ({recipient_acct})"}
 
 def pay_bill_or_airtime(conn, customer_id: int, service: str, target: str, amount_ngn: float, pin: str, when: str = None):

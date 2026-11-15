@@ -12,6 +12,14 @@ def init_security_tables(conn):
             created_at TEXT NOT NULL
         )
     """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS idempotency_keys (
+            idem_key TEXT PRIMARY KEY,
+            customer_id INTEGER NOT NULL,
+            reference TEXT NOT NULL,
+            created_at INTEGER NOT NULL
+        )
+    """)
     for col_sql in (
         "ALTER TABLE customers ADD COLUMN failed_logins INTEGER DEFAULT 0",
         "ALTER TABLE customers ADD COLUMN locked_until INTEGER DEFAULT 0",
@@ -28,6 +36,26 @@ def init_security_tables(conn):
         except Exception:
             if hasattr(conn, "rollback"):
                 conn.rollback()
+    conn.commit()
+
+def check_idempotency(conn, customer_id: int, idem_key: str) -> str | None:
+    if not idem_key:
+        return None
+    init_security_tables(conn)
+    cur = conn.cursor()
+    cur.execute("SELECT reference FROM idempotency_keys WHERE idem_key = ? AND customer_id = ?", (idem_key.strip(), customer_id))
+    row = cur.fetchone()
+    return row[0] if row else None
+
+def save_idempotency(conn, customer_id: int, idem_key: str, reference: str):
+    if not idem_key:
+        return
+    init_security_tables(conn)
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT OR IGNORE INTO idempotency_keys (idem_key, customer_id, reference, created_at) VALUES (?, ?, ?, ?)",
+        (idem_key.strip(), customer_id, reference, int(time.time())),
+    )
     conn.commit()
 
 def log_security_event(conn, customer_id: int, event: str, status: str = "OK"):

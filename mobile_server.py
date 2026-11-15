@@ -4,6 +4,7 @@ from fastapi.responses import HTMLResponse, Response
 from fpdf import FPDF, XPos, YPos
 from pydantic import BaseModel, Field
 from android_pwa import pwa_router
+from bank_beneficiaries import delete_beneficiary, save_beneficiary
 from bank_core import (
     add_money,
     get_account_summary,
@@ -47,6 +48,7 @@ class TransferReq(BaseModel):
     note: str = Field(default="Transfer", max_length=50)
     when: Optional[str] = None
     idem_key: str = Field(default="", max_length=64)
+    save_beneficiary: bool = True
 
 class VaultReq(BaseModel):
     action: Literal["save", "withdraw", "interest"]
@@ -106,10 +108,20 @@ def api_transfer(req: TransferReq, authorization: Optional[str] = Header(None)):
     u = auth_user(authorization)
     conn = get_db_connection(DB_PATH)
     res = send_transfer(conn, u["id"], req.recipient_account, req.bank_name, req.amount, req.pin, req.note, req.when, req.idem_key)
+    if res.get("ok") and req.save_beneficiary:
+        save_beneficiary(conn, u["id"], res["recipient"], req.recipient_account, req.bank_name)
     conn.close()
     if not res["ok"]:
         raise HTTPException(status_code=400, detail=res["error"])
     return res
+
+@app.delete("/api/beneficiaries/{bid}")
+def api_delete_beneficiary(bid: int, authorization: Optional[str] = Header(None)):
+    u = auth_user(authorization)
+    conn = get_db_connection(DB_PATH)
+    delete_beneficiary(conn, u["id"], bid)
+    conn.close()
+    return {"ok": True}
 
 @app.post("/api/vault")
 def api_vault(req: VaultReq, authorization: Optional[str] = Header(None)):

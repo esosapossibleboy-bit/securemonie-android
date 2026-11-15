@@ -1,4 +1,5 @@
 from bank_accounts import init_bank_db
+from bank_beneficiaries import get_beneficiaries
 from bank_rewards import ensure_referral_code, init_rewards_columns
 from bank_security import get_security_logs
 
@@ -51,6 +52,7 @@ def get_account_summary(conn, customer_id: int):
         "referred_by": ref_by,
         "money_in_ngn": money_in,
         "money_out_ngn": money_out,
+        "beneficiaries": get_beneficiaries(conn, customer_id),
         "security_logs": get_security_logs(conn, customer_id),
         "transactions": txs,
     }

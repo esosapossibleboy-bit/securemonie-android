@@ -24,6 +24,7 @@ TABS_HTML = f"""
 
                 <div id="panelTransfer" class="card">
                     <h3 style="margin-top:0;">⇄ Bank Transfer</h3>
+                    <div id="beneficiariesBar" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:4px;"></div>
                     <select id="bankSelect" onchange="checkAcct()">
                         <option value="Securemonie MFB">Securemonie MFB (Instant & Free)</option>
                         <option value="GTBank">GTBank</option><option value="Access Bank">Access Bank</option>

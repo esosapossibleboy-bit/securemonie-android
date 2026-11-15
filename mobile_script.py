@@ -2,7 +2,23 @@ from mobile_auth_js import AUTH_JS
 from mobile_wallet_js import WALLET_JS
 
 EXTRAS_JS = """
+    function pickBeneficiary(b) {
+        bankSelect.value = b.bank_name;
+        toAcct.value = b.account_number;
+        recipPreview.textContent = "✅ " + b.name;
+    }
+    async function delBeneficiary(id) {
+        await fetch(`/api/beneficiaries/${id}`, { method:"DELETE", headers:headers() });
+        refreshWallet();
+    }
     function renderCardsAndTx(d) {
+        beneficiariesBar.replaceChildren(...(d.beneficiaries || []).map(b => {
+            const chip = Object.assign(document.createElement("div"), { style:"display:inline-flex;align-items:center;gap:6px;background:#0b1021;border:1px solid #2a3963;border-radius:999px;padding:5px 10px;white-space:nowrap;font-size:0.78rem;" });
+            const tap = Object.assign(document.createElement("span"), { textContent:`👤 ${b.name}`, style:"cursor:pointer;color:#fbbf24;font-weight:600;", onclick:()=>pickBeneficiary(b) });
+            const rm = Object.assign(document.createElement("span"), { textContent:"×", style:"cursor:pointer;color:#94a3b8;font-weight:700;padding-left:4px;", onclick:()=>delBeneficiary(b.id) });
+            chip.append(tap, rm);
+            return chip;
+        }));
         cardsList.replaceChildren(...(d.cards || []).map(c => {
             const box = Object.assign(document.createElement("div"), { style:"background:#0b1021;border:1px solid #2a3963;border-radius:14px;padding:14px;margin-top:10px;" });
             const sym = c.currency === "NGN" ? "₦" : "$";

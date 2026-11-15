@@ -51,8 +51,15 @@ TABS_HTML = f"""
                 </div>
 
                 <div id="panelVault" class="card">
-                    <h3 style="margin-top:0;">🌱 Savings Vault (18.0% p.a.)</h3>
-                    <div style="font-size:1.5rem;font-weight:800;color:#fbbf24;margin-bottom:8px;">Vault Balance: <span id="vaultText">₦0.00</span></div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <h3 style="margin:0;">🌱 Savings Vault (18.0% p.a.)</h3>
+                        <button type="button" class="btn-dark" style="width:auto;margin:0;padding:5px 10px;font-size:0.76rem;" onclick="setVaultGoal()">🎯 Set Goal</button>
+                    </div>
+                    <div style="font-size:1.5rem;font-weight:800;color:#fbbf24;margin:8px 0 4px;">Vault Balance: <span id="vaultText">₦0.00</span></div>
+                    <div id="vaultGoalLabel" style="font-size:0.8rem;color:#94a3b8;margin-bottom:6px;">Goal: ₦100,000 (0%)</div>
+                    <div style="background:#0b1021;border-radius:999px;height:10px;overflow:hidden;margin-bottom:10px;">
+                        <div id="vaultGoalBar" style="background:linear-gradient(90deg,#f59e0b,#34d399);height:100%;width:0%;transition:width 0.3s;"></div>
+                    </div>
                     <input id="vaultAmt" type="number" inputmode="decimal" placeholder="Amount (₦)" />
                     <input id="vaultPin" type="password" inputmode="numeric" maxlength="4" placeholder="Enter 4-Digit PIN" />
                     <button class="btn-gold" onclick="doVault('save')">Save to Vault</button>

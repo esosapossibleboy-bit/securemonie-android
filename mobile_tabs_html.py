@@ -76,6 +76,14 @@ TABS_HTML = f"""
                         <h3 style="margin:0;">🧾 Full Transaction History</h3>
                         <button class="btn-gold" style="width:auto;margin:0;padding:7px 12px;font-size:0.8rem;" onclick="getPdf()">📄 PDF</button>
                     </div>
+                    <div style="display:flex;gap:8px;margin-top:8px;">
+                        <input id="txSearchInput" placeholder="🔍 Search name or ref..." oninput="filterTxHistory()" style="margin:0;" />
+                        <select id="txKindFilter" onchange="filterTxHistory()" style="margin:0;width:115px;">
+                            <option value="ALL">All</option>
+                            <option value="CREDIT">Money In</option>
+                            <option value="DEBIT">Money Out</option>
+                        </select>
+                    </div>
                     <div id="txList" style="margin-top:10px;"></div>
                 </div>
             </div>

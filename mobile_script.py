@@ -2,6 +2,7 @@ from mobile_auth_js import AUTH_JS
 from mobile_wallet_js import WALLET_JS
 
 EXTRAS_JS = """
+    let allTransactions = [];
     function pickBeneficiary(b) {
         bankSelect.value = b.bank_name;
         toAcct.value = b.account_number;
@@ -10,6 +11,23 @@ EXTRAS_JS = """
     async function delBeneficiary(id) {
         await fetch(`/api/beneficiaries/${id}`, { method:"DELETE", headers:headers() });
         refreshWallet();
+    }
+    function makeTxRow(t) {
+        const row = Object.assign(document.createElement("div"), { className:"tx" });
+        const left = document.createElement("div");
+        left.append(Object.assign(document.createElement("div"), { textContent:t.title, style:"font-size:0.88rem;" }), Object.assign(document.createElement("small"), { textContent:`${t.time} • ${t.ref}`, style:"color:#94a3b8;font-size:0.76rem;" }));
+        const amt = Object.assign(document.createElement("span"), { style:`font-weight:700;font-size:0.9rem;color:${t.kind==="CREDIT"?"#34d399":"#fb7185"}`, textContent:`${t.kind==="CREDIT"?"+":"-"}₦${t.amount.toLocaleString("en-NG", { minimumFractionDigits:2 })}` });
+        row.append(left, amt); return row;
+    }
+    function filterTxHistory() {
+        const q = (txSearchInput.value || "").trim().toLowerCase();
+        const kind = txKindFilter.value;
+        const filtered = allTransactions.filter(t => {
+            const matchKind = kind === "ALL" || t.kind === kind;
+            const matchText = !q || t.title.toLowerCase().includes(q) || t.ref.toLowerCase().includes(q);
+            return matchKind && matchText;
+        });
+        txList.replaceChildren(...filtered.map(makeTxRow));
     }
     function renderCardsAndTx(d) {
         beneficiariesBar.replaceChildren(...(d.beneficiaries || []).map(b => {
@@ -32,15 +50,9 @@ EXTRAS_JS = """
             );
             return box;
         }));
-        const makeTxRow = (t) => {
-            const row = Object.assign(document.createElement("div"), { className:"tx" });
-            const left = document.createElement("div");
-            left.append(Object.assign(document.createElement("div"), { textContent:t.title, style:"font-size:0.88rem;" }), Object.assign(document.createElement("small"), { textContent:`${t.time}`, style:"color:#94a3b8;font-size:0.76rem;" }));
-            const amt = Object.assign(document.createElement("span"), { style:`font-weight:700;font-size:0.9rem;color:${t.kind==="CREDIT"?"#34d399":"#fb7185"}`, textContent:`${t.kind==="CREDIT"?"+":"-"}₦${t.amount.toLocaleString("en-NG", { minimumFractionDigits:2 })}` });
-            row.append(left, amt); return row;
-        };
-        recentTxBox.replaceChildren(...d.transactions.slice(0, 2).map(makeTxRow));
-        txList.replaceChildren(...d.transactions.map(makeTxRow));
+        allTransactions = d.transactions || [];
+        recentTxBox.replaceChildren(...allTransactions.slice(0, 2).map(makeTxRow));
+        filterTxHistory();
         secLogList.replaceChildren(...(d.security_logs || []).map(l => {
             const row = Object.assign(document.createElement("div"), { className:"tx" });
             const color = l.status === "ALERT" ? "#fb7185" : "#34d399";
